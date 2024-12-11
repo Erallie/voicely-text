@@ -547,33 +547,33 @@ async def send_dm_error(ctx: commands.Context):
 
 # region Accents setup
 
-def get_accent_response(accent: str, typeof: ResponseType, reset: bool, guild: discord.Guild = None):
+def get_accent_response(accent: str, response_type: ResponseType, reset: bool, guild: discord.Guild = None):
     # langs = lang.tts_langs()
     if not reset:
-        if typeof == ResponseType.user:
+        if response_type == ResponseType.user:
             return f"Your accent has been set to **{accent}**."
-        elif typeof == ResponseType.server and guild is not None:
+        elif response_type == ResponseType.server and guild is not None:
             return f"{guild.name}'s server accent has been set to **{accent}**."
     else:
-        if typeof == ResponseType.user:
+        if response_type == ResponseType.user:
             if guild is not None:
                 return f"Your accent has been **reset** to the server default: `{accent}`"
             else:
                 return "Your accent has been **reset** to the server default."
-        elif typeof == ResponseType.server and guild is not None:
+        elif response_type == ResponseType.server and guild is not None:
             return f"{guild.name}'s server accent has been **reset** to default: `{accent}`"
 
 class AccentSelect(discord.ui.Select):
-    def __init__(self, options: List[discord.SelectOption], typeof: ResponseType):
+    def __init__(self, options: List[discord.SelectOption], response_type: ResponseType):
         super().__init__(options = options)
         self.placeholder = f'Language tags {options[0].value} through {options[len(options) - 1].value}'
-        self.typeof = typeof
+        self.response_type = response_type
 
         
     async def callback(self, interaction: discord.Interaction):
         langs = lang.tts_langs()
         # user_id = interaction.user.id
-        if self.typeof == ResponseType.user:
+        if self.response_type == ResponseType.user:
             user_id_str = str(interaction.user.id)
             if user_id_str not in members_settings:
                 members_settings[user_id_str] = {}
@@ -582,7 +582,7 @@ class AccentSelect(discord.ui.Select):
             save_members_settings()
             
             await interaction.response.send_message(get_accent_response(langs[self.values[0]], ResponseType.user, False), ephemeral=True)
-        elif self.typeof == ResponseType.server:
+        elif self.response_type == ResponseType.server:
             guild = interaction.guild
             guild_id_str = str(guild.id)
             if guild_id_str not in servers_settings:
@@ -592,15 +592,15 @@ class AccentSelect(discord.ui.Select):
             save_servers_settings()
             await interaction.response.send_message(get_accent_response(langs[self.values[0]], ResponseType.server, False, guild), ephemeral=True)
         else:
-            print(f"{interaction.guild.name}: Failed to set server accent:\n\t{self.typeof} is not a valid ResponseType!")
-            await interaction.response.send_message(f"There was an error setting the server accent. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.typeof} is not a valid ResponseType!\n```")
+            print(f"{interaction.guild.name}: Failed to set server accent:\n\t{self.response_type} is not a valid ResponseType!")
+            await interaction.response.send_message(f"There was an error setting the server accent. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.response_type} is not a valid ResponseType!\n```")
 
 class AccentsView(discord.ui.View):
     
     langs = lang.tts_langs()
     keys = list(langs.keys())
 
-    def __init__(self, typeof: ResponseType):
+    def __init__(self, response_type: ResponseType):
         super().__init__()
 
         options: List[List[discord.SelectOption]] = []
@@ -617,15 +617,15 @@ class AccentsView(discord.ui.View):
                 options[x].append(discord.SelectOption(label=key, value=key, description=self.langs[key]))
 
         for option in options:
-            self.add_item(AccentSelect(option, typeof))
+            self.add_item(AccentSelect(option, response_type))
 # endregion
 
 # region Regions setup
 
-def region_embed(typeof: ResponseType, page: int, pages: int, guild: discord.Guild = None):
-    if typeof == ResponseType.user:
+def region_embed(response_type: ResponseType, page: int, pages: int, guild: discord.Guild = None):
+    if response_type == ResponseType.user:
         embed = discord.Embed(title="Set your preferred region", description='Choose one **top-level domain** from the series of dropdowns below.\n\nI will read your messages as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
-    elif typeof == ResponseType.server and guild is not None:
+    elif response_type == ResponseType.server and guild is not None:
         embed = discord.Embed(title=f"Set {guild.name}'s region", description='Choose one **top-level domain** from the series of dropdowns below to set the server default.\n\nI will read messages in your server as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
     else:
         print("Error getting region_embed")
@@ -636,34 +636,34 @@ def region_embed(typeof: ResponseType, page: int, pages: int, guild: discord.Gui
     
     return embed
 
-def get_region_response(tld: str, typeof: ResponseType, reset: bool, guild: discord.Guild = None):
+def get_region_response(tld: str, response_type: ResponseType, reset: bool, guild: discord.Guild = None):
     if tld and tld != "":
         display_tld = f"`{tld}` - *{get_country(tld)}*"
     
     if not reset:
-        if typeof == ResponseType.user:
+        if response_type == ResponseType.user:
             return f"Your region's **top-level domain** has been set to {display_tld}."
-        elif typeof == ResponseType.server and guild is not None:
+        elif response_type == ResponseType.server and guild is not None:
             return f"The **top-level domain** for {guild.name}'s region has been set to {display_tld}."
     else:
-        if typeof == ResponseType.user:
+        if response_type == ResponseType.user:
             if guild is not None:
                 return f"Your region's **top-level domain** has been reset to the server default: {display_tld}"
             else:
                 return "Your region's **top-level domain** has been reset to the server default."
-        elif typeof == ResponseType.server and guild is not None:
+        elif response_type == ResponseType.server and guild is not None:
             return f"The **top-level domain** for {guild.name}'s region has been reset to default: {display_tld}"
 
 
 class RegionSelect(discord.ui.Select):
-    def __init__(self, options: List[discord.SelectOption], typeof: ResponseType):
+    def __init__(self, options: List[discord.SelectOption], response_type: ResponseType):
         super().__init__(options = options)
         self.placeholder = f'Domains .{options[0].value} through .{options[len(options) - 1].value}'
-        self.typeof = typeof
+        self.response_type = response_type
 
         
     async def callback(self, interaction: discord.Interaction):
-        if self.typeof == ResponseType.user:
+        if self.response_type == ResponseType.user:
             user_id_str = str(interaction.user.id)
             if user_id_str not in members_settings:
                 members_settings[user_id_str] = {}
@@ -672,7 +672,7 @@ class RegionSelect(discord.ui.Select):
             save_members_settings()
 
             await interaction.response.send_message(get_region_response(self.values[0], ResponseType.user, False), ephemeral=True)
-        elif self.typeof == ResponseType.server:
+        elif self.response_type == ResponseType.server:
             guild = interaction.guild
             guild_id_str = str(guild.id)
             if guild_id_str not in servers_settings:
@@ -683,8 +683,8 @@ class RegionSelect(discord.ui.Select):
             
             await interaction.response.send_message(get_region_response(self.values[0], ResponseType.server, False, guild), ephemeral=True)
         else:
-            print(f"{interaction.guild.name}: Failed to set server region:\n\t{self.typeof} is not a valid type!")
-            await interaction.response.send_message(f"There was an error setting the server region. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.typeof} is not a valid ResponseType!\n```")
+            print(f"{interaction.guild.name}: Failed to set server region:\n\t{self.response_type} is not a valid type!")
+            await interaction.response.send_message(f"There was an error setting the server region. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.response_type} is not a valid ResponseType!\n```")
 
 # region tld mappings
 def tld_get_countries():
@@ -772,11 +772,11 @@ class NavigationType(Enum):
 
 
 class NavigationButton(discord.ui.Button):
-    def __init__(self, navigation_type: NavigationType, typeof: ResponseType, page: int, pages: int):
+    def __init__(self, navigation_type: NavigationType, response_type: ResponseType, page: int, pages: int):
         self.page = page
         self.pages = pages
         self.embed = discord.Embed
-        self.typeof = typeof
+        self.response_type = response_type
         if navigation_type == NavigationType.next:
             label = "Next Page"
             # emoji = "⏩"
@@ -788,13 +788,13 @@ class NavigationButton(discord.ui.Button):
         super().__init__(label=label)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embed=region_embed(self.typeof, self.next_page, self.pages, interaction.guild), view=RegionsView(self.typeof, self.next_page), ephemeral=True)
+        await interaction.response.send_message(embed=region_embed(self.response_type, self.next_page, self.pages, interaction.guild), view=RegionsView(self.response_type, self.next_page), ephemeral=True)
 
 
 class RegionsView(discord.ui.View):
-    def __init__(self, typeof: ResponseType, page: int):
+    def __init__(self, response_type: ResponseType, page: int):
         super().__init__()
-        self.typeof = typeof
+        self.response_type = response_type
         self.page = page
         self.pages = get_select_pages(tld_list)
         self.index = page * 4
@@ -802,7 +802,7 @@ class RegionsView(discord.ui.View):
 
         def add_option():
             options = tld_list[self.index]
-            select = RegionSelect(options, self.typeof)
+            select = RegionSelect(options, self.response_type)
             self.add_item(select)
             self.index += 1
             self.count += 1
@@ -818,9 +818,9 @@ class RegionsView(discord.ui.View):
     def add_navigation(self):
         if self.pages > 1:
             if self.page < self.pages - 1:
-                self.add_item(NavigationButton(NavigationType.next, self.typeof, self.page, self.pages))
+                self.add_item(NavigationButton(NavigationType.next, self.response_type, self.page, self.pages))
             if self.page != 0:
-                self.add_item(NavigationButton(NavigationType.previous, self.typeof, self.page, self.pages))
+                self.add_item(NavigationButton(NavigationType.previous, self.response_type, self.page, self.pages))
 # endregion
 
 # endregion
