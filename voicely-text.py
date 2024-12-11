@@ -688,8 +688,12 @@ class RegionSelect(discord.ui.Select):
 
 # region tld mappings
 def tld_get_countries():
-    url = "https://en.wikipedia.org/wiki/Country_code_top-level_domain"
+    url = "https://en.wikipedia.org/wiki/Country_code_top-level_domains"
     response = requests.get(url)
+
+    if response.status_code != 200:
+        raise ConnectionError("You should restart the bot because I was unable to fetch https://en.wikipedia.org/wiki/Country_code_top-level_domain for tld countries!")
+    
     soup = BeautifulSoup(response.text, "html.parser")
 
     ccTLD_list = []
@@ -723,17 +727,16 @@ def get_country(tld: str):
 def get_tld_list():
     response = requests.get("https://www.google.com/supported_domains")
 
-    if response.status_code == 200:
-        string = response.text.strip('.google.')
-        tld_list = string.split('\n.google.')
-        if "us" not in tld_list:
-            tld_list.append("us")
-        tld_list.sort()
+    if response.status_code != 200:
+        raise ConnectionError("You should restart the bot because I was unable to fetch https://www.google.com/supported_domains for regions!")
 
-        return tld_list
-    else:
-        print("\nError: You should restart the bot because I was unable to fetch https://www.google.com/supported_domains for regions!")
-        return []
+    string = response.text.strip('.google.')
+    tld_list = string.split('\n.google.')
+    if "us" not in tld_list:
+        tld_list.append("us")
+    tld_list.sort()
+
+    return tld_list
 
 tld_list_raw = get_tld_list()
 
