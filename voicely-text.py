@@ -564,7 +564,7 @@ def get_accent_response(accent: str, typeof: ResponseType, reset: bool, guild: d
             return f"{guild.name}'s server accent has been **reset** to default: `{accent}`"
 
 class AccentSelect(discord.ui.Select):
-    def __init__(self, options: List[discord.SelectOption], typeof):
+    def __init__(self, options: List[discord.SelectOption], typeof: ResponseType):
         super().__init__(options = options)
         self.placeholder = f'Language tags {options[0].value} through {options[len(options) - 1].value}'
         self.typeof = typeof
@@ -573,7 +573,7 @@ class AccentSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         langs = lang.tts_langs()
         # user_id = interaction.user.id
-        if self.typeof == "user":
+        if self.typeof == ResponseType.user:
             user_id_str = str(interaction.user.id)
             if user_id_str not in members_settings:
                 members_settings[user_id_str] = {}
@@ -582,7 +582,7 @@ class AccentSelect(discord.ui.Select):
             save_members_settings()
             
             await interaction.response.send_message(get_accent_response(langs[self.values[0]], ResponseType.user, False), ephemeral=True)
-        elif self.typeof == "server":
+        elif self.typeof == ResponseType.server:
             guild = interaction.guild
             guild_id_str = str(guild.id)
             if guild_id_str not in servers_settings:
@@ -602,7 +602,7 @@ class AccentsView(discord.ui.View):
     langs = lang.tts_langs()
     keys = list(langs.keys())
 
-    def __init__(self, typeof):
+    def __init__(self, typeof: ResponseType):
         super().__init__()
 
         options: List[List[discord.SelectOption]] = []
@@ -1145,7 +1145,7 @@ async def accent(ctx: commands.Context, tag: str = None):
     else:
         embed = discord.Embed(title="Set your preferred accent", description='Choose from the dropdown below to have me read your messages in that accent.\n\nAccents are sorted **alphabetically** by **IETF language tag**.\n\nIf your region\'s accent is not listed below, you may need to run `/set region` to set your region instead.')
 
-        await ctx.send(embed=embed, view=AccentsView("user"), reference=ctx.message, ephemeral=True)
+        await ctx.send(embed=embed, view=AccentsView(ResponseType.user), reference=ctx.message, ephemeral=True)
 
 # endregion
 
@@ -1391,7 +1391,7 @@ async def accent(ctx: commands.Context, tag = None):
     else:
         embed = discord.Embed(title=f"Set {guild.name}'s accent", description='Choose from the dropdown below to set the server default to that accent.\n\nAccents are sorted **alphabetically** by **IETF language tag**.\n\nIf your region\'s accent is not listed below, you may need to run `/set server region` to set the server region instead.')
 
-        await ctx.send(embed=embed, view=AccentsView("server"), reference=ctx.message, ephemeral=True)
+        await ctx.send(embed=embed, view=AccentsView(ResponseType.server), reference=ctx.message, ephemeral=True)
 
 # endregion
 
