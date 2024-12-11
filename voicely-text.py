@@ -563,67 +563,63 @@ def get_accent_response(accent: str, typeof: ResponseType, reset: bool, guild: d
         elif typeof == ResponseType.server and guild is not None:
             return f"{guild.name}'s server accent has been **reset** to default: `{accent}`"
 
+class AccentSelect(discord.ui.Select):
+    def __init__(self, options: List[discord.SelectOption], typeof):
+        super().__init__(options = options)
+        self.placeholder = f'Language tags {options[0].value} through {options[len(options) - 1].value}'
+        self.typeof = typeof
 
-class AccentsView(discord.ui.View):
-    def __init__(self, typeof):
-        super().__init__()
-        self.type = typeof
-
-    langs = lang.tts_langs()
-    keys = list(langs.keys())
-    
-    options: List[List[discord.SelectOption]] = []
-    
-    select_count = math.ceil(len(langs) / 25)
-
-    for x in range(select_count):
-        options.append([])
-
-        new_keys = keys[(x * 25):min((x * 25) + 25, len(keys))]
-
-        for y in range(len(new_keys)):
-            key = new_keys[y]
-            options[x].append(discord.SelectOption(label=key, value=key, description=langs[key]))
-
-    
-    async def select_accent(self, interaction: discord.Interaction, select: discord.ui.Select):
+        
+    async def callback(self, interaction: discord.Interaction):
         langs = lang.tts_langs()
         # user_id = interaction.user.id
-        if self.type == "user":
+        if self.typeof == "user":
             user_id_str = str(interaction.user.id)
             if user_id_str not in members_settings:
                 members_settings[user_id_str] = {}
-            members_settings[user_id_str]["accent"] = select.values[0]
+            members_settings[user_id_str]["accent"] = self.values[0]
             
             save_members_settings()
             
-            return await interaction.response.send_message(get_accent_response(langs[select.values[0]], ResponseType.user, False), ephemeral=True)
-        elif self.type == "server":
+            await interaction.response.send_message(get_accent_response(langs[self.values[0]], ResponseType.user, False), ephemeral=True)
+        elif self.typeof == "server":
             guild = interaction.guild
             guild_id_str = str(guild.id)
             if guild_id_str not in servers_settings:
                 servers_settings[guild_id_str] = {}
-            servers_settings[guild_id_str]["accent"] = select.values[0]
+            servers_settings[guild_id_str]["accent"] = self.values[0]
             
             save_servers_settings()
-            return await interaction.response.send_message(get_accent_response(langs[select.values[0]], ResponseType.server, False, guild), ephemeral=True)
+            await interaction.response.send_message(get_accent_response(langs[self.values[0]], ResponseType.server, False, guild), ephemeral=True)
         else:
-            print(f"{interaction.guild.name}: Failed to set server accent:\n\t{self.type} is not a valid ResponseType!")
-            return await interaction.response.send_message(f"There was an error setting the server accent. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.type} is not a valid ResponseType!\n```")
+            print(f"{interaction.guild.name}: Failed to set server accent:\n\t{self.typeof} is not a valid ResponseType!")
+            await interaction.response.send_message(f"There was an error setting the server accent. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.typeof} is not a valid ResponseType!\n```")
 
 
-    @discord.ui.select(placeholder="Language tags af through id", options=options[0])
-    async def select_accent_1(self, interaction: discord.Interaction, select: discord.ui.Select):
-        await self.select_accent(interaction, select)
+
+class AccentsView(discord.ui.View):
     
-    @discord.ui.select(placeholder="Language tags is through si", options=options[1])
-    async def select_accent_2(self, interaction: discord.Interaction, select: discord.ui.Select):
-        await self.select_accent(interaction, select)
-    
-    @discord.ui.select(placeholder="Language tags sk through zh", options=options[2])
-    async def select_accent_3(self, interaction: discord.Interaction, select: discord.ui.Select):
-        await self.select_accent(interaction, select)
+    langs = lang.tts_langs()
+    keys = list(langs.keys())
 
+    def __init__(self, typeof):
+        super().__init__()
+
+        options: List[List[discord.SelectOption]] = []
+        
+        select_count = math.ceil(len(self.langs) / 25)
+
+        for x in range(select_count):
+            options.append([])
+
+            new_keys = self.keys[(x * 25):min((x * 25) + 25, len(self.keys))]
+
+            for y in range(len(new_keys)):
+                key = new_keys[y]
+                options[x].append(discord.SelectOption(label=key, value=key, description=self.langs[key]))
+
+        for option in options:
+            self.add_item(AccentSelect(option, typeof))
 # endregion
 
 # region Regions setup
