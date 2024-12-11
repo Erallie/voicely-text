@@ -595,8 +595,6 @@ class AccentSelect(discord.ui.Select):
             print(f"{interaction.guild.name}: Failed to set server accent:\n\t{self.typeof} is not a valid ResponseType!")
             await interaction.response.send_message(f"There was an error setting the server accent. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.typeof} is not a valid ResponseType!\n```")
 
-
-
 class AccentsView(discord.ui.View):
     
     langs = lang.tts_langs()
