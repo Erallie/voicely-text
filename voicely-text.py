@@ -624,13 +624,19 @@ class AccentsView(discord.ui.View):
 
 # region Regions setup
 
-def region_embed(typeof: ResponseType, guild: discord.Guild = None):
+def region_embed(typeof: ResponseType, page: int, pages: int, guild: discord.Guild = None):
     if typeof == ResponseType.user:
-        return discord.Embed(title="Set your preferred region", description='Choose one **top-level domain** from the series of dropdowns below.\n\nI will read your messages as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
+        embed = discord.Embed(title="Set your preferred region", description='Choose one **top-level domain** from the series of dropdowns below.\n\nI will read your messages as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
     elif typeof == ResponseType.server and guild is not None:
-        return discord.Embed(title=f"Set {guild.name}'s region", description='Choose one **top-level domain** from the series of dropdowns below to set the server default.\n\nI will read messages in your server as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
+        embed = discord.Embed(title=f"Set {guild.name}'s region", description='Choose one **top-level domain** from the series of dropdowns below to set the server default.\n\nI will read messages in your server as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
     else:
         print("Error getting region_embed")
+        return None
+    
+    if pages > 1:
+        embed.set_footer(text=f"Page {page + 1} of {pages}")
+    
+    return embed
 
 def get_region_response(tld: str, typeof: ResponseType, reset: bool, guild: discord.Guild = None):
     if tld and tld != "":
@@ -651,29 +657,36 @@ def get_region_response(tld: str, typeof: ResponseType, reset: bool, guild: disc
             return f"The **top-level domain** for {guild.name}'s region has been reset to default: {display_tld}"
 
 
-async def select_region(self, interaction: discord.Interaction, select: discord.ui.Select, typeof: ResponseType):
-    if typeof == ResponseType.user:
-        user_id_str = str(interaction.user.id)
-        if user_id_str not in members_settings:
-            members_settings[user_id_str] = {}
-        members_settings[user_id_str]["region"] = select.values[0]
+class RegionSelect(discord.ui.Select):
+    def __init__(self, options: List[discord.SelectOption], typeof: ResponseType):
+        super().__init__(options = options)
+        self.placeholder = f'Domains .{options[0].value} through .{options[len(options) - 1].value}'
+        self.typeof = typeof
 
-        save_members_settings()
+        
+    async def callback(self, interaction: discord.Interaction):
+        if self.typeof == ResponseType.user:
+            user_id_str = str(interaction.user.id)
+            if user_id_str not in members_settings:
+                members_settings[user_id_str] = {}
+            members_settings[user_id_str]["region"] = self.values[0]
 
-        return await interaction.response.send_message(get_region_response(select.values[0], ResponseType.user, False), ephemeral=True)
-    elif typeof == ResponseType.server:
-        guild = interaction.guild
-        guild_id_str = str(guild.id)
-        if guild_id_str not in servers_settings:
-            servers_settings[guild_id_str] = {}
-        servers_settings[guild_id_str]["region"] = select.values[0]
-        
-        save_servers_settings()
-        
-        return await interaction.response.send_message(get_region_response(select.values[0], ResponseType.server, False, guild), ephemeral=True)
-    else:
-        print(f"{interaction.guild.name}: Failed to set server region:\n\t{typeof} is not a valid type!")
-        return await interaction.response.send_message(f"There was an error setting the server region. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{typeof} is not a valid ResponseType!\n```")
+            save_members_settings()
+
+            await interaction.response.send_message(get_region_response(self.values[0], ResponseType.user, False), ephemeral=True)
+        elif self.typeof == ResponseType.server:
+            guild = interaction.guild
+            guild_id_str = str(guild.id)
+            if guild_id_str not in servers_settings:
+                servers_settings[guild_id_str] = {}
+            servers_settings[guild_id_str]["region"] = self.values[0]
+            
+            save_servers_settings()
+            
+            await interaction.response.send_message(get_region_response(self.values[0], ResponseType.server, False, guild), ephemeral=True)
+        else:
+            print(f"{interaction.guild.name}: Failed to set server region:\n\t{self.typeof} is not a valid type!")
+            await interaction.response.send_message(f"There was an error setting the server region. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.typeof} is not a valid ResponseType!\n```")
 
 # region tld mappings
 def tld_get_countries():
@@ -745,58 +758,71 @@ tld_list = get_tlds()
 # endregion
 
 # region views
-class RegionsView1(discord.ui.View):
-    def __init__(self, typeof: ResponseType):
+
+def get_select_pages(all_options: List[List[discord.SelectOption]]):
+    select_count = len(all_options)
+    if select_count == 5:
+        pages = 1
+    else:
+        pages = math.ceil(select_count / 4)
+
+    return pages
+
+class NavigationType(Enum):
+    next = "next"
+    previous = "previous"
+
+
+class NavigationButton(discord.ui.Button):
+    def __init__(self, navigation_type: NavigationType, typeof: ResponseType, page: int, pages: int):
+        self.page = page
+        self.pages = pages
+        self.embed = discord.Embed
+        self.typeof = typeof
+        if navigation_type == NavigationType.next:
+            label = "Next Page"
+            # emoji = "⏩"
+            self.next_page = self.page + 1
+        elif navigation_type == NavigationType.previous:
+            label = "Previous Page"
+            # emoji = "⏪"
+            self.next_page = self.page - 1
+        super().__init__(label=label)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=region_embed(self.typeof, self.next_page, self.pages, interaction.guild), view=RegionsView(self.typeof, self.next_page), ephemeral=True)
+
+
+class RegionsView(discord.ui.View):
+    def __init__(self, typeof: ResponseType, page: int):
         super().__init__()
-        self.type = typeof
+        self.typeof = typeof
+        self.page = page
+        self.pages = get_select_pages(tld_list)
+        self.index = page * 4
+        self.count = 0
+
+        def add_option():
+            options = tld_list[self.index]
+            select = RegionSelect(options, self.typeof)
+            self.add_item(select)
+            self.index += 1
+            self.count += 1
         
-    if len(tld_list) > 3:
-        @discord.ui.select(placeholder="Domains .ad through .cm", options=tld_list[0])
-        async def select_region_1(self, interaction: discord.Interaction, select: discord.ui.Select):
-            await select_region(self, interaction, select, self.type)
+        while (self.index < len(tld_list)) and (self.count < 4):
+            add_option()
 
-        @discord.ui.select(placeholder="Domains .cn through .co.zw", options=tld_list[1])
-        async def select_region_2(self, interaction: discord.Interaction, select: discord.ui.Select):
-            await select_region(self, interaction, select, self.type)
+        if self.pages == 1 and self.index < len(tld_list):
+            add_option()
 
-        @discord.ui.select(placeholder="Domains .com through .com.kh", options=tld_list[2])
-        async def select_region_3(self, interaction: discord.Interaction, select: discord.ui.Select):
-            await select_region(self, interaction, select, self.type)
+        self.add_navigation()
 
-        @discord.ui.select(placeholder="Domains .com.kw through .com.sv", options=tld_list[3])
-        async def select_region_4(self, interaction: discord.Interaction, select: discord.ui.Select):
-            await select_region(self, interaction, select, self.type)
-
-        if len(tld_list) > 4:
-            @discord.ui.button(label="Next page")
-            async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-                await interaction.response.send_message(embed=region_embed(self.type, interaction.guild), view=RegionsView2(self.type), ephemeral=True)
-
-class RegionsView2(discord.ui.View):
-    def __init__(self, typeof: ResponseType):
-        super().__init__()
-        self.type = typeof
-    
-    if len(tld_list) > 7:
-        @discord.ui.select(placeholder="Domains .com.tj through .gr", options=tld_list[4])
-        async def select_region_5(self, interaction: discord.Interaction, select: discord.ui.Select):
-            await select_region(self, interaction, select, self.type)
-
-        @discord.ui.select(placeholder="Domains .gy through .mk", options=tld_list[5])
-        async def select_region_6(self, interaction: discord.Interaction, select: discord.ui.Select):
-            await select_region(self, interaction, select, self.type)
-
-        @discord.ui.select(placeholder="Domains .ml through .sn", options=tld_list[6])
-        async def select_region_7(self, interaction: discord.Interaction, select: discord.ui.Select):
-            await select_region(self, interaction, select, self.type)
-
-        @discord.ui.select(placeholder="Domains .so through .ws", options=tld_list[7])
-        async def select_region_8(self, interaction: discord.Interaction, select: discord.ui.Select):
-            await select_region(self, interaction, select, self.type)
-
-        @discord.ui.button(label="Previous page")
-        async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await interaction.response.send_message(embed=region_embed(self.type, interaction.guild), view=RegionsView1(self.type), ephemeral=True)
+    def add_navigation(self):
+        if self.pages > 1:
+            if self.page < self.pages - 1:
+                self.add_item(NavigationButton(NavigationType.next, self.typeof, self.page, self.pages))
+            if self.page != 0:
+                self.add_item(NavigationButton(NavigationType.previous, self.typeof, self.page, self.pages))
 # endregion
 
 # endregion
@@ -1191,7 +1217,7 @@ async def region(ctx: commands.Context, tld: to_lower = None):
         save_members_settings()
         await ctx.send(get_region_response(tld, ResponseType.user, False), reference=ctx.message, ephemeral=True)
     elif len(tld_list) != 0:
-        await ctx.send(embed=region_embed(ResponseType.user), view=RegionsView1(ResponseType.user), reference=ctx.message, ephemeral=True)
+        await ctx.send(embed=region_embed(ResponseType.user, 0, get_select_pages(tld_list)), view=RegionsView(ResponseType.user, 0), reference=ctx.message, ephemeral=True)
     else:
         await ctx.send(f"Cannot fetch list of domains because https://www.google.com/supported_domains was unavailable when I logged in.\n\nPlease specify a `tld` parameter or tell <@339841608134557696> to restart the bot.\n\nHere is an incomplete [**list of top-level domains**](https://gtts.readthedocs.io/en/latest/module.html#localized-accents) you can use.", reference=ctx.message, ephemeral=True)
             
@@ -1435,7 +1461,7 @@ async def region(ctx: commands.Context, tld: to_lower = None):
         save_servers_settings()
         await ctx.send(get_region_response(tld, ResponseType.server, False, guild), reference=ctx.message, ephemeral=True)
     elif len(tld_list) != 0:
-        await ctx.send(embed=region_embed(ResponseType.server, guild), view=RegionsView1(ResponseType.server), reference=ctx.message, ephemeral=True)
+        await ctx.send(embed=region_embed(ResponseType.server, 0, get_select_pages(tld_list), guild), view=RegionsView(ResponseType.server, 0), reference=ctx.message, ephemeral=True)
     else:
         await ctx.send(f"Cannot fetch list of domains because https://www.google.com/supported_domains was unavailable when I logged in.\n\nPlease specify a `tld` parameter or tell <@339841608134557696> to restart the bot.\n\nHere is an incomplete [**list of top-level domains**](https://gtts.readthedocs.io/en/latest/module.html#localized-accents) you can use.", reference=ctx.message, ephemeral=True)
             
