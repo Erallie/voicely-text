@@ -546,13 +546,20 @@ class ResponseType(Enum):
 # def is_in_guild(interaction: discord.Interaction | commands.Context) -> bool:
 #     return interaction.guild is not None
 
-async def send_dm_error(ctx: commands.Context):
+def return_full_command(ctx: commands.Context):
     if ctx.invoked_subcommand is not None:
         subcommand = f" {ctx.invoked_subcommand}"
     else:
         subcommand = ""
 
-    await ctx.send(f"`/{ctx.command}{subcommand}` cannot be used in dm's! Please use this command in the text channel of a server.", reference=ctx.message, ephemeral=True)
+    return f"`/{ctx.command}{subcommand}`"
+
+
+async def send_dm_error(ctx: commands.Context):
+    await ctx.send(f"{return_full_command(ctx)} cannot be used in dm's! Please use this command in the text channel of a server.", reference=ctx.message, ephemeral=True)
+
+async def send_admin_error(ctx: commands.Context):
+    await ctx.send(f"{return_full_command(ctx)} can only be used by server administrators.", reference=ctx.message, ephemeral=True)
 
 # region Accents setup
 
@@ -1303,11 +1310,14 @@ async def server(ctx: commands.Context):
 
 # region Botprefix
 # @server.command()
-# @commands.has_permissions(administrator=True)
 # @app_commands.describe(prefix="One or more characters to be used as a prefix. Type 'reset' to set to default.")
 # async def botprefix(ctx: commands.Context, prefix: return_stripped):
 #     """Set the prefix used to run bot commands."""
 
+#     if not ctx.channel.permissions_for(ctx.author).administrator:
+#         await send_admin_error(ctx)
+#         return
+    
 #     guild = ctx.guild
 #     guild_id_str = str(guild.id)
 
@@ -1341,15 +1351,18 @@ async def server(ctx: commands.Context):
 
 # region Timeout
 @server.command()
-@commands.has_permissions(administrator=True)
 @app_commands.describe(seconds="Timeout duration in seconds. Type 'reset' to reset to default.")
 async def timeout(ctx: commands.Context, seconds: return_int):
     """Set the number of seconds of inactivity after which the bot will leave the voice channel."""
-    
+
     if ctx.guild is None:
         await send_dm_error(ctx)
         return
         
+    if not ctx.channel.permissions_for(ctx.author).administrator:
+        await send_admin_error(ctx)
+        return
+
     error_message = f"Please enter a **positive whole number** to set the **timeout duration** in **seconds**.\n\nAlternatively, type `reset` to **reset the timeout** to the default value *({bot.default_settings['timeout']} seconds)*."
 
     guild_id_str = str(ctx.guild.id)
@@ -1385,13 +1398,16 @@ async def timeout(ctx: commands.Context, seconds: return_int):
 # region Accents
 
 @server.command()
-@commands.has_permissions(administrator=True)
 @app_commands.describe(tag=accent_desc)
 async def accent(ctx: commands.Context, tag = None):
     """Set the default accent for the server. This can be overridden on a per-user basis."""
     
     if ctx.guild is None:
         await send_dm_error(ctx)
+        return
+
+    if not ctx.channel.permissions_for(ctx.author).administrator:
+        await send_admin_error(ctx)
         return
 
     guild = ctx.guild
@@ -1434,13 +1450,16 @@ async def accent(ctx: commands.Context, tag = None):
 # region Regions
 
 @server.command()
-@commands.has_permissions(administrator=True)
 @app_commands.describe(tld=tld_desc)
 async def region(ctx: commands.Context, tld: to_lower = None):
     """Set the default region for the server. This can be overridden on a per-user basis."""
 
     if ctx.guild is None:
         await send_dm_error(ctx)
+        return
+
+    if not ctx.channel.permissions_for(ctx.author).administrator:
+        await send_admin_error(ctx)
         return
 
     guild = ctx.guild
@@ -1479,13 +1498,16 @@ async def region(ctx: commands.Context, tld: to_lower = None):
 
 # region autoread
 @server.command()
-@commands.has_permissions(administrator=True)
 @app_commands.describe(enabled="Type 'true' or 'false'. Or type 'reset' to reset to default.")
 async def autoread(ctx: commands.Context, enabled: to_lower):
     """Set the autoread default for the server."""
 
     if ctx.guild is None:
         await send_dm_error(ctx)
+        return
+
+    if not ctx.channel.permissions_for(ctx.author).administrator:
+        await send_admin_error(ctx)
         return
 
     # user_id_str = str(ctx.author.id)
@@ -1535,12 +1557,15 @@ async def admin(ctx: commands.Context):
 
 # region Leave
 @admin.command()
-@commands.has_permissions(administrator=True)
 async def leave(ctx: commands.Context):
     """Make the bot leave the voice channel."""
 
     if ctx.guild is None:
         await send_dm_error(ctx)
+        return
+
+    if not ctx.channel.permissions_for(ctx.author).administrator:
+        await send_admin_error(ctx)
         return
 
     if ctx.voice_client:
@@ -1554,13 +1579,16 @@ async def leave(ctx: commands.Context):
 # region skip
 
 @admin.command()
-@commands.has_permissions(administrator=True)
 @app_commands.describe(count="The number of upcoming messages I should skip. Type 'cancel' to read all upcoming messages.")
 async def skip(ctx: commands.Context, count: return_int = 1):
     """Skip the next message(s) in this channel. This includes currently playing or sent messages."""
 
     if ctx.guild is None:
         await send_dm_error(ctx)
+        return
+
+    if not ctx.channel.permissions_for(ctx.author).administrator:
+        await send_admin_error(ctx)
         return
 
     invalid_count = '`count` must be a positive whole number! Alternatively, enter `cancel` to read all upcoming messages.'
