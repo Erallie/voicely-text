@@ -995,7 +995,7 @@ async def speak(ctx: commands.Context, text: str, accent: str = None, tld: to_lo
         langs = lang.tts_langs()
         
         if accent not in langs:
-            errors.append(f"`{accent}` is not a valid IETF language tag! {accent_list_desc}")
+            errors.append(f"> `{accent}` is not a valid IETF language tag!\n> \n> {accent_list_desc}")
             
             accent = None
         
@@ -1003,7 +1003,7 @@ async def speak(ctx: commands.Context, text: str, accent: str = None, tld: to_lo
         try:
             requests.get(f"https://translate.google.{tld}")
         except requests.ConnectionError:
-            errors.append(f"I cannot retrieve your desired region because `https://translate.google.`**`{tld}`** is currently down or does not exist. Please specify another **top-level domain** or try again later. Type `/list regions` for a list of supported top-level domains. Otherwise, leave `tld` blank to use your default region.")
+            errors.append(f"> I cannot retrieve your desired region because `https://translate.google.`**`{tld}`** is currently down or does not exist.\n> \n> Please specify another **top-level domain** or try again later.\n> \n> Type `/list regions` for a list of supported top-level domains. Otherwise, leave `tld` blank to use your default region.")
             tld = None
             
     if len(errors) != 0:
