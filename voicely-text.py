@@ -115,7 +115,6 @@ def save_servers_settings():
         # Write the dictionary to the JSON file
         json.dump(servers_settings, f)
 
-
 # endregion
 
 # endregion
@@ -670,14 +669,12 @@ def get_region_response(tld: str, response_type: ResponseType, reset: bool, guil
         elif response_type == ResponseType.server and guild is not None:
             return f"The **top-level domain** for {guild.name}'s region has been reset to default: {display_tld}"
 
-
 class RegionSelect(discord.ui.Select):
     def __init__(self, options: List[discord.SelectOption], response_type: ResponseType):
         super().__init__(options = options)
         self.placeholder = f'Domains .{options[0].value} through .{options[len(options) - 1].value}'
         self.response_type = response_type
-
-        
+    
     async def callback(self, interaction: discord.Interaction):
         if self.response_type == ResponseType.user:
             user_id_str = str(interaction.user.id)
@@ -789,7 +786,6 @@ class NavigationType(Enum):
     next = "next"
     previous = "previous"
 
-
 class NavigationButton(discord.ui.Button):
     def __init__(self, navigation_type: NavigationType, response_type: ResponseType, page: int, pages: int):
         self.page = page
@@ -808,7 +804,6 @@ class NavigationButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.send_message(embed=region_embed(self.response_type, self.next_page, self.pages, interaction.guild), view=RegionsView(self.response_type, self.next_page), ephemeral=True)
-
 
 class RegionsView(discord.ui.View):
     def __init__(self, response_type: ResponseType, page: int):
@@ -1541,6 +1536,86 @@ async def autoread(ctx: commands.Context, enabled: to_lower):
     
     save_servers_settings()
     await ctx.send(confirm_message, reference=ctx.message, ephemeral=True)
+
+# endregion
+
+# region admin roles
+class OnlyReplyAllowed(discord.AllowedMentions):
+    def __init__(self):
+        super().__init__()
+        self.everyone = False
+        self.replied_user = True
+        self.roles = False
+        self.users = False
+
+
+class RolesView(discord.ui.View):
+    def __init__(self, guild: discord.Guild):
+        super().__init__()
+        self.guild = guild
+
+    @discord.ui.select(cls=discord.ui.RoleSelect, max_values=25)
+    async def select_roles(self, interaction: discord.Interaction, select: discord.ui.RoleSelect):
+        guild_id_str = str(self.guild.id)
+        
+        if guild_id_str not in servers_settings:
+            servers_settings[guild_id_str] = {}
+        servers_settings[guild_id_str]["admin roles"] = []
+
+        role_mentions = []
+        for role in select.values:
+            role_id_str = str(role.id)
+            servers_settings[guild_id_str]["admin roles"].append(role_id_str)
+            role_mentions.append(f"<@&{role_id_str}>")
+
+        save_servers_settings()
+        
+        # region making role mentions string
+        role_count = len(role_mentions)
+
+        # region roles
+        full_roles_string = ""
+        for x in range(role_count):
+            if role_count == 1: #If there is only one user
+                full_roles_string += role_mentions[x]
+            elif x == 0 and role_count == 2: #If there are two users, but we're referencing the first user
+                full_roles_string += f"{role_mentions[x]} "
+            elif x < role_count - 1: #If it's not the last user we're referencing
+                full_roles_string += f"{role_mentions[x]}, "
+            else: #If this is the last user we're referencing
+                full_roles_string += f"and {role_mentions[x]}"
+        # endregion
+
+        # region verb
+        if role_count > 1:
+            verb = "have"
+        else:
+            verb = "has"
+        # endregion
+        # endregion
+
+        await interaction.response.send_message(f"{full_roles_string} now {verb} access to admin commands for <@1290741552158609419> in **{interaction.guild.name}**.", allowed_mentions=OnlyReplyAllowed(), ephemeral=True)
+        
+        
+
+@server.command()
+@app_commands.describe()
+async def adminroles(ctx: commands.Context):
+    """Set the roles you want to have access to admin-only commands."""
+
+    if ctx.guild is None:
+        await send_dm_error(ctx)
+        return
+
+    if not ctx.channel.permissions_for(ctx.author).administrator:
+        await send_admin_error(ctx)
+        return
+    
+    guild = ctx.guild
+    
+    embed = discord.Embed(title=f"Set Admin Roles for {guild.name}", description='Choose **one or more roles** from the dropdown below to give them **access** to **administrative commands** for <@1290741552158609419>.')
+    await ctx.send(embed=embed, view=RolesView(guild), reference=ctx.message, ephemeral=True)
+
 
 # endregion
 
