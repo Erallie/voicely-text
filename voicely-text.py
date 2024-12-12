@@ -1021,6 +1021,9 @@ async def speak(ctx: commands.Context, text: str, accent: str = None, tld: to_lo
         await process_message(ctx, text, accent, tld)
         if ctx.interaction is not None:
             await ctx.send(f"**{ctx.author.display_name}:** {text}")
+        else:
+            await ctx.message.delete()
+            await ctx.send(f"**{ctx.author.display_name}:** {text}")
 
 # endregion
 
