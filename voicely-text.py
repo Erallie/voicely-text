@@ -553,12 +553,20 @@ def return_full_command(ctx: commands.Context):
 
     return f"`/{ctx.command}{subcommand}`"
 
-
 async def send_dm_error(ctx: commands.Context):
     await ctx.send(f"{return_full_command(ctx)} cannot be used in dm's! Please use this command in the text channel of a server.", reference=ctx.message, ephemeral=True)
 
 async def send_admin_error(ctx: commands.Context):
-    await ctx.send(f"{return_full_command(ctx)} can only be used by server administrators.", reference=ctx.message, ephemeral=True)
+    await ctx.send(f"{return_full_command(ctx)} can only be used by users with one of the **configured admin roles**.\n\nIf you have administrator privileges, you can **set these roles** by typing `/set server adminroles`.", reference=ctx.message, ephemeral=True)
+
+def is_admin(ctx: commands.Context):
+    guild_id_str = str(ctx.guild.id)
+    for role_id_str in servers_settings[guild_id_str]["admin roles"]:
+        role = ctx.author.get_role(int(role_id_str))
+        if role is not None:
+            return True
+    
+    return ctx.channel.permissions_for(ctx.author).administrator
 
 # region Accents setup
 
@@ -1309,7 +1317,7 @@ async def server(ctx: commands.Context):
 # async def botprefix(ctx: commands.Context, prefix: return_stripped):
 #     """Set the prefix used to run bot commands."""
 
-#     if not ctx.channel.permissions_for(ctx.author).administrator:
+#     if not is_admin(ctx):
 #         await send_admin_error(ctx)
 #         return
     
@@ -1354,7 +1362,7 @@ async def timeout(ctx: commands.Context, seconds: return_int):
         await send_dm_error(ctx)
         return
         
-    if not ctx.channel.permissions_for(ctx.author).administrator:
+    if not is_admin(ctx):
         await send_admin_error(ctx)
         return
 
@@ -1401,7 +1409,7 @@ async def accent(ctx: commands.Context, tag = None):
         await send_dm_error(ctx)
         return
 
-    if not ctx.channel.permissions_for(ctx.author).administrator:
+    if not is_admin(ctx):
         await send_admin_error(ctx)
         return
 
@@ -1453,7 +1461,7 @@ async def region(ctx: commands.Context, tld: to_lower = None):
         await send_dm_error(ctx)
         return
 
-    if not ctx.channel.permissions_for(ctx.author).administrator:
+    if not is_admin(ctx):
         await send_admin_error(ctx)
         return
 
@@ -1501,7 +1509,7 @@ async def autoread(ctx: commands.Context, enabled: to_lower):
         await send_dm_error(ctx)
         return
 
-    if not ctx.channel.permissions_for(ctx.author).administrator:
+    if not is_admin(ctx):
         await send_admin_error(ctx)
         return
 
@@ -1547,7 +1555,6 @@ class OnlyReplyAllowed(discord.AllowedMentions):
         self.replied_user = True
         self.roles = False
         self.users = False
-
 
 class RolesView(discord.ui.View):
     def __init__(self, guild: discord.Guild):
@@ -1608,7 +1615,7 @@ async def adminroles(ctx: commands.Context):
         return
 
     if not ctx.channel.permissions_for(ctx.author).administrator:
-        await send_admin_error(ctx)
+        await ctx.send(f"{return_full_command(ctx)} can only be used by server administrators.", reference=ctx.message, ephemeral=True)
         return
     
     guild = ctx.guild
@@ -1639,7 +1646,7 @@ async def leave(ctx: commands.Context):
         await send_dm_error(ctx)
         return
 
-    if not ctx.channel.permissions_for(ctx.author).administrator:
+    if not is_admin(ctx):
         await send_admin_error(ctx)
         return
 
@@ -1662,7 +1669,7 @@ async def skip(ctx: commands.Context, count: return_int = 1):
         await send_dm_error(ctx)
         return
 
-    if not ctx.channel.permissions_for(ctx.author).administrator:
+    if not is_admin(ctx):
         await send_admin_error(ctx)
         return
 
