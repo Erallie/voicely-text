@@ -1606,8 +1606,22 @@ class RolesView(discord.ui.View):
         # endregion
 
         await interaction.response.send_message(f"{full_roles_string} now {verb} access to admin commands for <@1290741552158609419> in **{interaction.guild.name}**.", allowed_mentions=OnlyReplyAllowed(), ephemeral=True)
-        
-        
+
+    @discord.ui.button(label="Remove admin roles", style=discord.ButtonStyle.red)
+    async def reset_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild_id_str = str(interaction.guild.id)
+        if guild_id_str in servers_settings and "admin roles" in servers_settings[guild_id_str]:
+            del servers_settings[guild_id_str]["admin roles"]
+
+            if len(servers_settings[guild_id_str]) == 0:
+                del servers_settings[guild_id_str]
+
+        save_servers_settings()
+
+        await interaction.response.send_message(f"Only users with the **administrator permission** now have access to admin commands for <@1290741552158609419> in **{interaction.guild.name}**.", ephemeral=True)
+
+
+
 
 @server.command()
 @app_commands.describe()
