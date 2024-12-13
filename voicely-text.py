@@ -561,10 +561,11 @@ async def send_admin_error(ctx: commands.Context):
 
 def is_admin(ctx: commands.Context):
     guild_id_str = str(ctx.guild.id)
-    for role_id_str in servers_settings[guild_id_str]["admin roles"]:
-        role = ctx.author.get_role(int(role_id_str))
-        if role is not None:
-            return True
+    if guild_id_str in servers_settings and "admin roles" in servers_settings[guild_id_str]:
+        for role_id_str in servers_settings[guild_id_str]["admin roles"]:
+            role = ctx.author.get_role(int(role_id_str))
+            if role is not None:
+                return True
     
     return ctx.channel.permissions_for(ctx.author).administrator
 
