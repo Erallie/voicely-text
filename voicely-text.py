@@ -710,7 +710,7 @@ def get_region_response(response_type: ResponseType, reset: bool, tld: str = "",
             else:
                 return "Your region's **top-level domain** has been reset to the server default."
         elif response_type == ResponseType.server and guild is not None:
-            return f"The **top-level domain** for {guild.name}'s region has been reset to default: {display_tld(bot.default_settings["region"])}"
+            return f"The **top-level domain** for {guild.name}'s region has been reset to default: {display_tld(bot.default_settings['region'])}"
     else:
         return "There was an error setting the accent: `tld` is an empty string!"
 
