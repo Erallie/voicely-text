@@ -676,6 +676,46 @@ def region_embed(response_type: ResponseType, page: int, pages: int, guild: disc
     
     return embed
 
+class ResetButton(discord.ui.Button):
+    def __init__(self, setting: Setting, response_type: ResponseType):
+        self.setting = setting
+        self.response_type = response_type
+        def capitalize_first(string: str):
+            return string[0].upper() + string[1:]
+            
+
+        super().__init__(label=f"Reset {capitalize_first(response_type.value)} {capitalize_first(setting.value)}", style=discord.ButtonStyle.red)
+
+    async def callback(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if guild is not None:
+            guild_id_str = str(guild.id)
+        user_id_str = str(interaction.user.id)
+        setting_str = self.setting.value
+        
+        match self.response_type:
+            case ResponseType.user:
+                if user_id_str in members_settings and setting_str in members_settings[user_id_str]:
+                    del members_settings[user_id_str][setting_str]
+                    
+                    if len(members_settings[user_id_str]) == 0:
+                        del members_settings[user_id_str]
+                save_members_settings()
+
+            case ResponseType.server:
+                if guild_id_str in servers_settings and setting_str in servers_settings[guild_id_str]:
+                    del servers_settings[guild_id_str][setting_str]
+
+                    if len(servers_settings[guild_id_str]) == 0:
+                        del servers_settings[guild_id_str]
+                save_servers_settings()
+
+        match self.setting:
+            case Setting.accent:
+                await interaction.response.send_message(get_accent_response(self.response_type, True, guild=interaction.guild), ephemeral=True)
+            case Setting.region:
+                await interaction.response.send_message(get_region_response(self.response_type, True, guild=interaction.guild))
+
 
 # region Accents setup
 class AccentSelect(discord.ui.Select):
@@ -717,6 +757,7 @@ class AccentsView(discord.ui.View):
 
     def __init__(self, response_type: ResponseType):
         super().__init__()
+        self.response_type = response_type
 
         options: List[List[discord.SelectOption]] = []
         
@@ -733,6 +774,9 @@ class AccentsView(discord.ui.View):
 
         for option in options:
             self.add_item(AccentSelect(option, response_type))
+
+        self.add_item(ResetButton(Setting.accent, self.response_type))
+        
 # endregion
 
 # region Regions setup
@@ -842,6 +886,8 @@ class RegionsView(discord.ui.View):
             add_option()
 
         self.add_navigation()
+
+        self.add_item(ResetButton(Setting.region, self.response_type))
 
     def add_navigation(self):
         if self.pages > 1:
