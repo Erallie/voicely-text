@@ -590,6 +590,80 @@ def get_accent_response(accent: str, response_type: ResponseType, reset: bool, g
         elif response_type == ResponseType.server and guild is not None:
             return f"{guild.name}'s server accent has been **reset** to default: `{accent}`"
 
+# region tld mappings
+def tld_get_countries():
+    url = "https://en.wikipedia.org/wiki/Country_code_top-level_domains"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        raise ConnectionError("You should restart the bot because I was unable to fetch https://en.wikipedia.org/wiki/Country_code_top-level_domain for tld countries!")
+    
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    ccTLD_list = []
+    for table in soup.find_all("table", class_="wikitable"):
+        for row in table.find_all("tr")[1:]:
+            cols = row.find_all("td")
+            ccTLD_list.append((cols[0].text, cols[1].text))
+
+    ccTLD_dict = {}
+    for ccTLD, country in ccTLD_list:
+        ccTLD_dict[ccTLD] = country
+
+    return ccTLD_dict
+
+tld_countries = tld_get_countries()
+
+
+def get_country(tld: str):
+    start = tld.rfind('.')
+    if start != -1:
+        tld = tld[start:]
+    else:
+        tld = "." + tld
+    country = str(tld_countries.get(tld))
+    country = re.sub(r"\[\d+]", "", country)
+    return country.strip()
+
+# endregion
+
+# region tld_list
+def get_tld_list():
+    response = requests.get("https://www.google.com/supported_domains")
+
+    if response.status_code != 200:
+        raise ConnectionError("You should restart the bot because I was unable to fetch https://www.google.com/supported_domains for regions!")
+
+    string = response.text.strip('.google.')
+    tld_list = string.split('\n.google.')
+    if "us" not in tld_list:
+        tld_list.append("us")
+    tld_list.sort()
+
+    return tld_list
+
+tld_list_raw = get_tld_list()
+
+def get_tlds():
+    options: List[List[discord.SelectOption]] = []
+    
+    select_count = math.ceil(len(tld_list_raw) / 25)
+
+    for x in range(select_count):
+        options.append([])
+
+        new_list = tld_list_raw[(x * 25):min((x * 25) + 25, len(tld_list_raw))]
+
+        for y in range(len(new_list)):
+            options[x].append(discord.SelectOption(label=new_list[y], value=new_list[y], description=get_country(new_list[y])))
+    return options
+
+tld_list = get_tlds()
+# tld_list = []
+# endregion
+
+
+# region Accents setup
 class AccentSelect(discord.ui.Select):
     def __init__(self, options: List[discord.SelectOption], response_type: ResponseType):
         super().__init__(options = options)
@@ -710,78 +784,6 @@ class RegionSelect(discord.ui.Select):
         else:
             print(f"{interaction.guild.name}: Failed to set server region:\n\t{self.response_type} is not a valid type!")
             await interaction.response.send_message(f"There was an error setting the server region. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.response_type} is not a valid ResponseType!\n```")
-
-# region tld mappings
-def tld_get_countries():
-    url = "https://en.wikipedia.org/wiki/Country_code_top-level_domains"
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        raise ConnectionError("You should restart the bot because I was unable to fetch https://en.wikipedia.org/wiki/Country_code_top-level_domain for tld countries!")
-    
-    soup = BeautifulSoup(response.text, "html.parser")
-
-    ccTLD_list = []
-    for table in soup.find_all("table", class_="wikitable"):
-        for row in table.find_all("tr")[1:]:
-            cols = row.find_all("td")
-            ccTLD_list.append((cols[0].text, cols[1].text))
-
-    ccTLD_dict = {}
-    for ccTLD, country in ccTLD_list:
-        ccTLD_dict[ccTLD] = country
-
-    return ccTLD_dict
-
-tld_countries = tld_get_countries()
-
-
-def get_country(tld: str):
-    start = tld.rfind('.')
-    if start != -1:
-        tld = tld[start:]
-    else:
-        tld = "." + tld
-    country = str(tld_countries.get(tld))
-    country = re.sub(r"\[\d+]", "", country)
-    return country.strip()
-
-# endregion
-
-# region tld_list
-def get_tld_list():
-    response = requests.get("https://www.google.com/supported_domains")
-
-    if response.status_code != 200:
-        raise ConnectionError("You should restart the bot because I was unable to fetch https://www.google.com/supported_domains for regions!")
-
-    string = response.text.strip('.google.')
-    tld_list = string.split('\n.google.')
-    if "us" not in tld_list:
-        tld_list.append("us")
-    tld_list.sort()
-
-    return tld_list
-
-tld_list_raw = get_tld_list()
-
-def get_tlds():
-    options: List[List[discord.SelectOption]] = []
-    
-    select_count = math.ceil(len(tld_list_raw) / 25)
-
-    for x in range(select_count):
-        options.append([])
-
-        new_list = tld_list_raw[(x * 25):min((x * 25) + 25, len(tld_list_raw))]
-
-        for y in range(len(new_list)):
-            options[x].append(discord.SelectOption(label=new_list[y], value=new_list[y], description=get_country(new_list[y])))
-    return options
-
-tld_list = get_tlds()
-# tld_list = []
-# endregion
 
 # region views
 
