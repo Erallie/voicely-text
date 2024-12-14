@@ -662,6 +662,20 @@ tld_list = get_tlds()
 # tld_list = []
 # endregion
 
+def region_embed(response_type: ResponseType, page: int, pages: int, guild: discord.Guild = None):
+    if response_type == ResponseType.user:
+        embed = discord.Embed(title="Set your preferred region", description='Choose one **top-level domain** from the series of dropdowns below.\n\nI will read your messages as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
+    elif response_type == ResponseType.server and guild is not None:
+        embed = discord.Embed(title=f"Set {guild.name}'s region", description='Choose one **top-level domain** from the series of dropdowns below to set the server default.\n\nI will read messages in your server as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
+    else:
+        print("Error getting region_embed")
+        return None
+    
+    if pages > 1:
+        embed.set_footer(text=f"Page {page + 1} of {pages}")
+    
+    return embed
+
 
 # region Accents setup
 class AccentSelect(discord.ui.Select):
@@ -722,20 +736,6 @@ class AccentsView(discord.ui.View):
 # endregion
 
 # region Regions setup
-
-def region_embed(response_type: ResponseType, page: int, pages: int, guild: discord.Guild = None):
-    if response_type == ResponseType.user:
-        embed = discord.Embed(title="Set your preferred region", description='Choose one **top-level domain** from the series of dropdowns below.\n\nI will read your messages as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
-    elif response_type == ResponseType.server and guild is not None:
-        embed = discord.Embed(title=f"Set {guild.name}'s region", description='Choose one **top-level domain** from the series of dropdowns below to set the server default.\n\nI will read messages in your server as though I am from a region that uses that domain.\n\nDomains are sorted **alphabetically**.')
-    else:
-        print("Error getting region_embed")
-        return None
-    
-    if pages > 1:
-        embed.set_footer(text=f"Page {page + 1} of {pages}")
-    
-    return embed
 
 def get_region_response(tld: str, response_type: ResponseType, reset: bool, guild: discord.Guild = None):
     if tld and tld != "":
