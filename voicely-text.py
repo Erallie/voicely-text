@@ -569,7 +569,10 @@ def is_admin(ctx: commands.Context):
     
     return ctx.channel.permissions_for(ctx.author).administrator
 
-# region Accents setup
+class Setting(Enum):
+    accent = "accent"
+    region = "region"
+
 
 def get_accent_response(accent: str, response_type: ResponseType, reset: bool, guild: discord.Guild = None):
     # langs = lang.tts_langs()
