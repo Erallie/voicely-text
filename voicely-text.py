@@ -417,7 +417,7 @@ async def process_message(ctx: commands.Context | discord.Message, text: str, ac
     # Replaces it with an empty string
     message_content = re.sub(r'\d{8,}', "", message_content)
     
-    if message_content == "" or re.match(r'^[\s\t\n]+$', message_content, re.MULTILINE) != None:
+    if message_content == "" or re.match(r'^[^A-z0-9]+$', message_content, re.MULTILINE) != None:
         print(f"{ctx.guild.name}: Message contains no text, skipping.")
         return
 
