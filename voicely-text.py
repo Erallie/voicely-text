@@ -14,6 +14,7 @@ import builtins
 from bs4 import BeautifulSoup
 from enum import Enum
 from typing import List
+from cryptography.fernet import Fernet, InvalidToken
 # import signal
 
 # Define intents
@@ -58,7 +59,7 @@ bot = Bot()
 # Check token
 def get_token() -> str:
     try:
-        with open('./token', 'r') as file:
+        with open('./sensitive/token', 'r') as file:
             token = file.read().strip()
             if not token:
                 raise ValueError("The token file is empty. Make sure to put the token inside the token file.")
@@ -67,6 +68,29 @@ def get_token() -> str:
         raise FileNotFoundError("The token file wasn't found.") from e
     except Exception as e:
         raise RuntimeError(f"An unexpected error occurred: {e}") from e
+
+# region encryption
+
+# Load the key from a file
+def load_key(filename='./sensitive/secret.key'):
+    with open(filename, 'rb') as key_file:
+        return key_file.read()
+
+key = load_key();
+
+# Encrypt a message
+def encrypt_message(message, key):
+    fernet = Fernet(key)
+    encrypted_message = fernet.encrypt(message.encode())
+    return encrypted_message
+
+# Decrypt a message
+def decrypt_message(encrypted_message, key):
+    fernet = Fernet(key)
+    decrypted_message = fernet.decrypt(encrypted_message).decode()
+    return decrypted_message
+
+# endregion
 
 # region save and load settings
 # region members settings
@@ -178,10 +202,29 @@ def return_nickname(user: discord.User | discord.Member, guild_id: int):
     guild_id_str = str(guild_id)
     user_id_str = str(user.id)
     if user_id_str in members_settings and "nickname" in members_settings[user_id_str]:
+        invalid_token_error = "Could not decrypt nickname. The provided token is invalid. Will attempt to encrypt a new nickname instead.";
         if guild_id_str in members_settings[user_id_str]["nickname"]:
-            return members_settings[user_id_str]["nickname"][guild_id_str]
+            nickname = members_settings[user_id_str]["nickname"][guild_id_str]
+            encrypted_nickname = nickname.encode()
+            try:
+                return decrypt_message(encrypted_nickname, key)
+            except InvalidToken:
+                print(invalid_token_error)
+                new_encrypted_nickname = encrypt_message(nickname, key)
+                members_settings[user_id_str]["nickname"][guild_id_str] = new_encrypted_nickname.decode()
+                save_members_settings()
+                return nickname
         elif "default" in members_settings[user_id_str]["nickname"]:
-            return members_settings[user_id_str]["nickname"]["default"]
+            nickname = members_settings[user_id_str]["nickname"]["default"]
+            encrypted_nickname = nickname.encode()
+            try:
+                return decrypt_message(encrypted_nickname, key)
+            except InvalidToken:
+                print(invalid_token_error)
+                new_encrypted_nickname = encrypt_message(nickname, key)
+                members_settings[user_id_str]["nickname"][guild_id_str] = new_encrypted_nickname.decode()
+                save_members_settings()
+                return nickname
         else:
             return user.display_name
     else:
@@ -1357,8 +1400,10 @@ async def nickname(ctx: commands.Context, nickname: return_stripped, server: ret
             members_settings[user_id_str] = {}
         if "nickname" not in members_settings[user_id_str]:
             members_settings[user_id_str]["nickname"] = {}
+
+        encrypted_nickname = encrypt_message(nickname, key)
         
-        members_settings[user_id_str]["nickname"][server] = nickname
+        members_settings[user_id_str]["nickname"][server] = encrypted_nickname.decode()
 
         save_members_settings()
         await ctx.send(f"Your nickname has been set to **{nickname}** {server_messages[0]}.\n\nI will say this whenever I refer to you{server_messages[2]}, both when **reading mentions** and when **announcing your messages**.", reference=ctx.message, ephemeral=True)
