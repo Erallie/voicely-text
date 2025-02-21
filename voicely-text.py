@@ -177,7 +177,7 @@ async def on_guild_join(guild: discord.Guild):
     
     bot.loop.create_task(check_empty_channel(guild))
 
-    print(f"Bot added to guild: {guild.name}")
+    print(f"Bot added to guild: {guild.id}")
 
 # endregion
 
@@ -190,11 +190,11 @@ async def on_guild_remove(guild: discord.Guild):
             try:
                 await bot.queue[guild.id]["task"]
             except asyncio.CancelledError:
-                print(f"{guild.name}: Queue task has been cancelled")
+                print(f"{guild.id}: Queue task has been cancelled")
 
         del bot.queue[guild.id]
 
-        print(f"Bot removed from guild: {guild.name}")
+        print(f"Bot removed from guild: {guild.id}")
 
 # endregion
 
@@ -232,7 +232,7 @@ def return_nickname(user: discord.User | discord.Member, guild_id: int):
 
 async def process_queue(guild: discord.Guild):
     while True:
-        print(f"{guild.name}: Waiting for the next message in the queue for...")
+        print(f"{guild.id}: Waiting for the next message in the queue for...")
         message, text, user, voice_channel, accent_override, tld_override = await bot.queue[guild.id]["queue"].get()
         guild_id = guild.id
         user_id = user.id
@@ -272,7 +272,7 @@ async def process_queue(guild: discord.Guild):
         
         if not should_play():
             decrement_skips()
-            print(f"{guild.name}: {user.global_name}'s message was skipped.")
+            print(f"{guild.id}: {user.id}'s message was skipped.")
             bot.loop.call_soon_threadsafe(bot.queue[guild_id]["queue"].task_done)
             continue
         
@@ -284,7 +284,7 @@ async def process_queue(guild: discord.Guild):
         bot.active_timeouts[guild_id]
         # endregion
 
-        print(f"{guild.name}: Processing message: {text}")
+        print(f"{guild.id}: Processing message: {text}")
         
         # region set accent and region
         user_id_str = str(user_id)
@@ -348,7 +348,7 @@ async def process_queue(guild: discord.Guild):
             if voice_client and voice_client.is_connected():
                 def after_playing(error):
                     if error:
-                        print(f"{guild.name}: Error occurred during playback: {error}")
+                        print(f"{guild.id}: Error occurred during playback: {error}")
 
                     # region add last_speakers
                     if guild_id in bot.last_speakers:
@@ -364,15 +364,15 @@ async def process_queue(guild: discord.Guild):
                     # Clean up the audio file
                     try:
                         os.remove(f"voice_files/{guild_id}-tts.mp3")
-                        print(f"{guild.name}: Cleaned up the TTS file")
+                        print(f"{guild.id}: Cleaned up the TTS file")
                     except OSError as remove_error:
-                        print(f"{guild.name}: Error cleaning up the TTS file:\n\t{remove_error}")
+                        print(f"{guild.id}: Error cleaning up the TTS file:\n\t{remove_error}")
                     finally:    
                         # Indicate that the current task is done
                         bot.loop.call_soon_threadsafe(bot.queue[guild_id]["queue"].task_done)
 
                 # Play the audio file in the voice channel
-                print(f"{guild.name}: Playing the TTS message in {message.channel.name}...")
+                print(f"{guild.id}: Playing the TTS message in {message.channel.id}...")
                 voice_client.play(discord.FFmpegPCMAudio(f"voice_files/{guild_id}-tts.mp3", executable='bot-env/ffmpeg/bin/ffmpeg'), after=after_playing)
                 # ffmpeg currently uses version 7.1 on windows and 7.0.2 on linux
 
@@ -383,9 +383,9 @@ async def process_queue(guild: discord.Guild):
                     decrement_skips()
                     voice_client.stop()
 
-                print(f"{guild.name}: Audio finished playing")
+                print(f"{guild.id}: Audio finished playing")
             else:
-                print(f"{guild.name}: Voice client is not connected; task done")
+                print(f"{guild.id}: Voice client is not connected; task done")
                 bot.queue[guild_id]["queue"].task_done()
 
 # region When a message is sent
@@ -396,13 +396,13 @@ async def process_message(ctx: commands.Context | discord.Message, text: str, ac
 
     for command in bot.commands:
         if text.startswith(f"{bot.command_prefix}{command}"):
-            print(f"{ctx.guild.name}: Message is a command, skipping.")
+            print(f"{ctx.guild.id}: Message is a command, skipping.")
             return
     
     text_channel_name = ctx.channel.name
     voice_channel = discord.utils.get(ctx.guild.voice_channels, name=text_channel_name)
     if ctx.channel is not voice_channel:
-        print(f'{ctx.guild.name}: text channel is not the same voice channel.')
+        print(f'{ctx.guild.id}: text channel is not the same voice channel.')
         return
     
     # Remove emote IDs, leaving only emote names (e.g., :emote_name:) 
@@ -461,7 +461,7 @@ async def process_message(ctx: commands.Context | discord.Message, text: str, ac
     message_content = re.sub(r'\d{8,}', "", message_content)
     
     if message_content == "" or re.match(r'^[\s\t\n\.\[\]\(\)!;:?,¡¿]+$', message_content, re.MULTILINE) != None:
-        print(f"{ctx.guild.name}: Message contains no text, skipping.")
+        print(f"{ctx.guild.id}: Message contains no text, skipping.")
         return
 
     if isinstance(ctx, discord.Message):
@@ -472,7 +472,7 @@ async def process_message(ctx: commands.Context | discord.Message, text: str, ac
     if voice_channel:
         # Add the filtered message content to the queue
         await bot.queue[ctx.guild.id]["queue"].put((message, message_content, ctx.author, voice_channel, accent, tld))
-        print(f"{ctx.guild.name}: Added message to queue for {ctx.author.display_name}: {message_content}")
+        print(f"{ctx.guild.id}: Added message to queue for {ctx.author.id}: {message_content}")
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -525,7 +525,7 @@ async def check_empty_channel(guild: discord.Guild):
             voice_channel = guild.voice_client.channel
             if len(voice_channel.members) == 1:
                 await guild.voice_client.disconnect()
-                print(f"{guild.name}: Disconnected from voice channel as it was empty.")
+                print(f"{guild.id}: Disconnected from voice channel as it was empty.")
                 del bot.active_timeouts[guild.id]
         await asyncio.sleep(60)  # Check every 60 seconds
 
@@ -543,13 +543,13 @@ async def leave_after_timeout(guild: discord.Guild):
         else:
             timeout = bot.default_settings["timeout"]
         
-        print(f'Timeout set for {guild.name}.')
+        print(f'Timeout set for {guild.id}.')
         await asyncio.sleep(timeout)
         if guild.voice_client:
             await guild.voice_client.disconnect()
-            print(f'Disconnected from {guild.name} due to timeout.')
+            print(f'Disconnected from {guild.id} due to timeout.')
     except asyncio.CancelledError:
-        print(f'Timeout cancelled for {guild.name}')
+        print(f'Timeout cancelled for {guild.id}')
 
 # endregion
 
@@ -828,7 +828,7 @@ class AccentSelect(discord.ui.Select):
             save_servers_settings()
             await interaction.response.send_message(get_accent_response(ResponseType.server, False, langs[self.values[0]], guild), ephemeral=True)
         else:
-            print(f"{interaction.guild.name}: Failed to set server accent:\n\t{self.response_type} is not a valid ResponseType!")
+            print(f"{interaction.guild.id}: Failed to set server accent:\n\t{self.response_type} is not a valid ResponseType!")
             await interaction.response.send_message(f"There was an error setting the server accent. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.response_type} is not a valid ResponseType!\n```")
 
 class AccentsView(discord.ui.View):
@@ -889,7 +889,7 @@ class RegionSelect(discord.ui.Select):
             
             await interaction.response.send_message(get_region_response(ResponseType.server, False, self.values[0], guild), ephemeral=True)
         else:
-            print(f"{interaction.guild.name}: Failed to set server region:\n\t{self.response_type} is not a valid type!")
+            print(f"{interaction.guild.id}: Failed to set server region:\n\t{self.response_type} is not a valid type!")
             await interaction.response.send_message(f"There was an error setting the server region. Please create an [issue](https://github.com/Erallie/voicely-text/issues) and include the following error:\n\n```\n{self.response_type} is not a valid ResponseType!\n```")
 
 # region views
