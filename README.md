@@ -3,6 +3,9 @@ Voicely Text is another text-to-speech bot for Discord, but instead of linking t
 
 [Invite me](https://discord.com/oauth2/authorize?client_id=1290741552158609419)
 [Discord App Directory](https://discord.com/application-directory/1290741552158609419)
+
+[Our Discord](https://discord.gg/cCCEk7BX4W)
+[Privacy Policy](https://github.com/Erallie/voicely-text/blob/main/legal/privacy-policy.md)
 # Getting started
 ## Enabling text-to-speech
 If you are in a voice channel, and you want the bot to **read your messages**, type `/tts start` in the associated text chat. All of the messages you send in that channel will be read by Voicely Text until you either run `/tts stop` or leave the voice channel.
