@@ -656,17 +656,23 @@ def tld_get_countries():
     
     soup = BeautifulSoup(response.text, "html.parser")
 
+    tables = soup.find_all("table", class_="wikitable")
+
+    if len(tables) < 2:
+        raise RuntimeError("Expected at least two tables on the page, but found fewer.")
+
+    target_table = tables[1]  # Get the second table (index starts at 0)
+
     ccTLD_list = []
-    for table in soup.find_all("table", class_="wikitable"):
-        for row in table.find_all("tr")[1:]:
-            cols = row.find_all("td")
-            ccTLD_list.append((cols[0].text, cols[1].text))
 
-    ccTLD_dict = {}
-    for ccTLD, country in ccTLD_list:
-        ccTLD_dict[ccTLD] = country
+    for row in target_table.find_all("tr")[1:]:
+        cols = row.find_all("td")
+        if len(cols) >= 2:
+            tld = cols[0].text.strip()
+            country = cols[1].text.strip()
+            ccTLD_list.append((tld, country))
 
-    return ccTLD_dict
+    return dict(ccTLD_list)
 
 tld_countries = tld_get_countries()
 
