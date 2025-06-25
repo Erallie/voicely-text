@@ -111,9 +111,11 @@ members_settings = load_members_settings()
 
 # Save the current notify data to a JSON file
 def save_members_settings():
-    with open('data/members_settings.json', 'w') as f:
-        # Write the dictionary to the JSON file
-        json.dump(members_settings, f)
+    temp_path = 'data/members_settings.json.tmp'
+    final_path = 'data/members_settings.json'
+    with open(temp_path, 'w') as f:
+        json.dump(members_settings, f, indent=4)
+    os.replace(temp_path, final_path)
 
 # endregion
 
@@ -135,9 +137,11 @@ servers_settings = load_servers_settings()
 
 # Save the current notify data to a JSON file
 def save_servers_settings():
-    with open('data/servers_settings.json', 'w') as f:
-        # Write the dictionary to the JSON file
-        json.dump(servers_settings, f)
+    temp_path = 'data/servers_settings.json.tmp'
+    final_path = 'data/servers_settings.json'
+    with open(temp_path, 'w') as f:
+        json.dump(servers_settings, f, indent=4)
+    os.replace(temp_path, final_path)
 
 # endregion
 
