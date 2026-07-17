@@ -14,6 +14,9 @@ import builtins
 from enum import Enum
 from typing import List
 from cryptography.fernet import Fernet, InvalidToken
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 # import signal
 
 # Define intents
@@ -682,18 +685,22 @@ def get_country(tld: str):
 
 # region tld_list
 def get_tld_list():
-    response = requests.get("https://www.google.com/supported_domains")
+    try:
+        with open(BASE_DIR / "tld_list.json", "r", encoding="utf-8") as file:
+            tlds = json.load(file)
+    except FileNotFoundError:
+        print("Cannot open tld_list.json: File not found.")
+        return []
+    except json.JSONDecodeError as error:
+        print(f"Cannot read tld_list.json: Invalid JSON: {error}")
+        return []
 
-    if response.status_code != 200:
-        raise ConnectionError("You should restart the bot because I was unable to fetch https://www.google.com/supported_domains for regions!")
+    if not isinstance(tlds, list):
+        print("Cannot read tld_list.json: The top-level JSON value must be a list.")
+        return []
 
-    string = response.text.strip('.google.')
-    tld_list = string.split('\n.google.')
-    if "us" not in tld_list:
-        tld_list.append("us")
-    tld_list.sort()
+    return sorted(set(tld.lower().strip() for tld in tlds if isinstance(tld, str)))
 
-    return tld_list
 
 tld_list_raw = get_tld_list()
 
