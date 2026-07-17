@@ -11,7 +11,6 @@ import requests
 import datetime
 import json
 import builtins
-from bs4 import BeautifulSoup
 from enum import Enum
 from typing import List
 from cryptography.fernet import Fernet, InvalidToken
@@ -651,34 +650,23 @@ def get_accent_response(response_type: ResponseType, reset: bool, accent: str = 
         return "There was an error setting the accent: `accent` is an empty string!"
 
 # region tld mappings
-def tld_get_countries():
-    url = "https://en.wikipedia.org/wiki/Country_code_top-level_domains"
-    response = requests.get(url)
+def load_tld_countries():
+    path = "tld_countries.json"
 
-    if response.status_code != 200:
-        raise ConnectionError("You should restart the bot because I was unable to fetch https://en.wikipedia.org/wiki/Country_code_top-level_domain for tld countries!")
-    
-    soup = BeautifulSoup(response.text, "html.parser")
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except FileNotFoundError as error:
+        raise FileNotFoundError(
+            f"The local TLD country file was not found at {path}."
+        ) from error
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"The local TLD country file at {path} contains invalid JSON."
+        ) from error
 
-    tables = soup.find_all("table", class_="wikitable")
 
-    if len(tables) < 2:
-        raise RuntimeError("Expected at least two tables on the page, but found fewer.")
-
-    target_table = tables[1]  # Get the second table (index starts at 0)
-
-    ccTLD_list = []
-
-    for row in target_table.find_all("tr")[1:]:
-        cols = row.find_all("td")
-        if len(cols) >= 2:
-            tld = cols[0].text.strip()
-            country = cols[1].text.strip()
-            ccTLD_list.append((tld, country))
-
-    return dict(ccTLD_list)
-
-tld_countries = tld_get_countries()
+tld_countries = load_tld_countries()
 
 
 def get_country(tld: str):
@@ -687,9 +675,8 @@ def get_country(tld: str):
         tld = tld[start:]
     else:
         tld = "." + tld
-    country = str(tld_countries.get(tld))
-    country = re.sub(r"\[\d+]", "", country)
-    return country.strip()
+
+    return tld_countries.get(tld.lower(), "Unknown region")
 
 # endregion
 
