@@ -356,8 +356,8 @@ async def process_queue(guild: discord.Guild):
                             pass
 
                     voice_client = await voice_channel.connect(
-                        timeout=30.0,
-                        reconnect=True
+                        timeout=15.0,
+                        reconnect=False
                     )
 
                     print(f"{guild.id}: Connected to voice channel {voice_channel.id}.")
