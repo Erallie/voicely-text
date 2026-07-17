@@ -342,14 +342,43 @@ async def process_queue(guild: discord.Guild):
             tts = gTTS(text=text, lang=accent, tld=region)
             tts.save(f"voice_files/{guild_id}-tts.mp3")
             
-            voice_client = guild.voice_client
+            voice_client: discord.VoiceClient | None = guild.voice_client
 
-            if voice_client and voice_client.channel != voice_channel:
-                await voice_client.move_to(voice_channel)
-            elif not voice_client:
-                await voice_channel.connect()
+            try:
+                if voice_client and voice_client.channel != voice_channel:
+                    print(f"{guild.id}: Moving to voice channel {voice_channel.id}...")
+                    await voice_client.move_to(voice_channel)
 
-            voice_client: discord.VoiceClient = guild.voice_client
+                elif not voice_client or not voice_client.is_connected():
+                    print(f"{guild.id}: Connecting to voice channel {voice_channel.id}...")
+
+                    if voice_client:
+                        try:
+                            await voice_client.disconnect(force=True)
+                        except Exception:
+                            pass
+
+                    voice_client = await voice_channel.connect(
+                        timeout=30.0,
+                        reconnect=True
+                    )
+
+                    print(f"{guild.id}: Connected to voice channel {voice_channel.id}.")
+
+            except Exception as error:
+                print(
+                    f"{guild.id}: Failed to connect to voice channel: "
+                    f"{type(error).__name__}: {error}"
+                )
+
+                bot.queue[guild_id]["queue"].task_done()
+
+                try:
+                    os.remove(f"voice_files/{guild_id}-tts.mp3")
+                except OSError:
+                    pass
+
+                continue
 
             if voice_client and voice_client.is_connected():
                 def after_playing(error):
