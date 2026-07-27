@@ -108,13 +108,29 @@ def load_members_settings():
 # Load the data from the JSON file when the bot starts
 members_settings = load_members_settings()
 
+def save_json_atomic(file_path: str, data: dict):
+    temporary_path = file_path + '.tmp'
+
+    with open(temporary_path, 'w', encoding='utf-8') as f:
+        json.dump(
+            data,
+            f,
+            indent=4,
+            ensure_ascii=False
+        )
+
+        f.flush()
+        os.fsync(f.fileno())
+
+    os.replace(temporary_path, file_path)
+
+
 # Save the current notify data to a JSON file
 def save_members_settings():
-    temp_path = 'data/members_settings.json.tmp'
-    final_path = 'data/members_settings.json'
-    with open(temp_path, 'w') as f:
-        json.dump(members_settings, f, indent=4)
-    os.replace(temp_path, final_path)
+    save_json_atomic(
+        'data/members_settings.json',
+        members_settings
+    )
 
 # endregion
 
@@ -136,11 +152,10 @@ servers_settings = load_servers_settings()
 
 # Save the current notify data to a JSON file
 def save_servers_settings():
-    temp_path = 'data/servers_settings.json.tmp'
-    final_path = 'data/servers_settings.json'
-    with open(temp_path, 'w') as f:
-        json.dump(servers_settings, f, indent=4)
-    os.replace(temp_path, final_path)
+    save_json_atomic(
+        'data/servers_settings.json',
+        servers_settings
+    )
 
 # endregion
 
