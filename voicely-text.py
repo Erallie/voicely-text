@@ -29,7 +29,11 @@ intents.members = True
 # Set up the bot
 class Bot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="!", intents=intents)
+        super().__init__(
+            command_prefix="!",
+            intents=intents,
+            chunk_guilds_at_startup=False
+        )
         self.run_loop = None
         self.queue = {}
         self.default_settings = {
