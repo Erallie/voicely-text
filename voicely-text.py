@@ -14,8 +14,7 @@ import builtins
 from enum import Enum
 from typing import List
 from cryptography.fernet import Fernet, InvalidToken
-import tempfile
-import fcntl
+import sqlite3
 # import signal
 
 # Define intents
@@ -98,103 +97,213 @@ def decrypt_message(encrypted_message, key):
 # endregion
 
 # region save and load settings
-# region members settings
-# Load notify data from file (or return an empty dictionary if the file doesn't exist)
-def load_members_settings():
+DATABASE_PATH = 'data/voicely-text.db'
+MEMBERS_JSON_PATH = 'data/members_settings.json'
+SERVERS_JSON_PATH = 'data/servers_settings.json'
+
+
+def connect_database():
+    os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
+
+    connection = sqlite3.connect(
+        DATABASE_PATH,
+        timeout=30
+    )
+
+    connection.execute('PRAGMA journal_mode = WAL')
+    connection.execute('PRAGMA foreign_keys = ON')
+
+    return connection
+
+
+def initialize_database():
+    with connect_database() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS member_settings (
+                user_id TEXT PRIMARY KEY,
+                settings_json TEXT NOT NULL
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS server_settings (
+                guild_id TEXT PRIMARY KEY,
+                settings_json TEXT NOT NULL
+            )
+            """
+        )
+
+
+def load_json_file_for_migration(file_path: str):
     try:
-        with open('data/members_settings.json', 'r') as f:
-            # Load JSON data into a dictionary
-            return json.load(f)
+        with open(file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+
+        if not isinstance(data, dict):
+            raise ValueError(f'{file_path} must contain a JSON object.')
+
+        return data
     except FileNotFoundError:
-        print('Cannot open data/members_settings.json: File not found.')
-        # If the file doesn't exist, return an empty dictionary
         return {}
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f'Cannot migrate {file_path} because it contains invalid JSON: {error}'
+        ) from error
 
-# Store users who want to be notified in a dictionary {guild_id: set(user_ids)}
-# Load the data from the JSON file when the bot starts
-members_settings = load_members_settings()
 
-def save_json_atomic(file_path: str, data: dict):
-    directory = os.path.dirname(file_path)
-    filename = os.path.basename(file_path)
-    lock_path = file_path + '.lock'
+def migrate_json_settings_if_needed():
+    members_to_migrate = load_json_file_for_migration(MEMBERS_JSON_PATH)
+    servers_to_migrate = load_json_file_for_migration(SERVERS_JSON_PATH)
 
-    os.makedirs(directory, exist_ok=True)
+    with connect_database() as connection:
+        member_count = connection.execute(
+            'SELECT COUNT(*) FROM member_settings'
+        ).fetchone()[0]
 
-    with open(lock_path, 'w', encoding='utf-8') as lock_file:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        server_count = connection.execute(
+            'SELECT COUNT(*) FROM server_settings'
+        ).fetchone()[0]
 
-        temporary_path = None
+        if member_count == 0 and members_to_migrate:
+            connection.executemany(
+                """
+                INSERT INTO member_settings (user_id, settings_json)
+                VALUES (?, ?)
+                """,
+                [
+                    (
+                        str(user_id),
+                        json.dumps(settings, ensure_ascii=False)
+                    )
+                    for user_id, settings in members_to_migrate.items()
+                ]
+            )
 
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode='w',
-                encoding='utf-8',
-                dir=directory,
-                prefix=filename + '.',
-                suffix='.tmp',
-                delete=False
-            ) as temporary_file:
-                temporary_path = temporary_file.name
+            print(
+                f'Migrated {len(members_to_migrate)} member setting record(s) '
+                f'from {MEMBERS_JSON_PATH}.'
+            )
 
-                json.dump(
-                    data,
-                    temporary_file,
-                    indent=4,
-                    ensure_ascii=False
-                )
+        if server_count == 0 and servers_to_migrate:
+            connection.executemany(
+                """
+                INSERT INTO server_settings (guild_id, settings_json)
+                VALUES (?, ?)
+                """,
+                [
+                    (
+                        str(guild_id),
+                        json.dumps(settings, ensure_ascii=False)
+                    )
+                    for guild_id, settings in servers_to_migrate.items()
+                ]
+            )
 
-                temporary_file.flush()
-                os.fsync(temporary_file.fileno())
-
-            os.replace(temporary_path, file_path)
-
-        finally:
-            if (
-                temporary_path is not None
-                and os.path.exists(temporary_path)
-            ):
-                os.remove(temporary_path)
-
-            fcntl.flock(
-                lock_file.fileno(),
-                fcntl.LOCK_UN
+            print(
+                f'Migrated {len(servers_to_migrate)} server setting record(s) '
+                f'from {SERVERS_JSON_PATH}.'
             )
 
 
-# Save the current notify data to a JSON file
+def load_settings_table(table_name: str, id_column: str):
+    allowed_tables = {
+        'member_settings': 'user_id',
+        'server_settings': 'guild_id'
+    }
+
+    if allowed_tables.get(table_name) != id_column:
+        raise ValueError('Invalid settings table requested.')
+
+    settings = {}
+
+    with connect_database() as connection:
+        rows = connection.execute(
+            f'SELECT {id_column}, settings_json FROM {table_name}'
+        ).fetchall()
+
+    for record_id, settings_json in rows:
+        try:
+            loaded_settings = json.loads(settings_json)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f'Invalid JSON stored in {table_name} for ID {record_id}.'
+            ) from error
+
+        if not isinstance(loaded_settings, dict):
+            raise ValueError(
+                f'Invalid settings stored in {table_name} for ID {record_id}.'
+            )
+
+        settings[str(record_id)] = loaded_settings
+
+    return settings
+
+
+def save_settings_table(
+    table_name: str,
+    id_column: str,
+    settings: dict
+):
+    allowed_tables = {
+        'member_settings': 'user_id',
+        'server_settings': 'guild_id'
+    }
+
+    if allowed_tables.get(table_name) != id_column:
+        raise ValueError('Invalid settings table requested.')
+
+    rows = [
+        (
+            str(record_id),
+            json.dumps(record_settings, ensure_ascii=False)
+        )
+        for record_id, record_settings in settings.items()
+    ]
+
+    with connect_database() as connection:
+        connection.execute(f'DELETE FROM {table_name}')
+
+        if rows:
+            connection.executemany(
+                f"""
+                INSERT INTO {table_name} ({id_column}, settings_json)
+                VALUES (?, ?)
+                """,
+                rows
+            )
+
+
+initialize_database()
+migrate_json_settings_if_needed()
+
+members_settings = load_settings_table(
+    'member_settings',
+    'user_id'
+)
+
+servers_settings = load_settings_table(
+    'server_settings',
+    'guild_id'
+)
+
+
 def save_members_settings():
-    save_json_atomic(
-        'data/members_settings.json',
+    save_settings_table(
+        'member_settings',
+        'user_id',
         members_settings
     )
 
-# endregion
 
-# region server settings
-# Load notify data from file (or return an empty dictionary if the file doesn't exist)
-def load_servers_settings():
-    try:
-        with open('data/servers_settings.json', 'r') as f:
-            # Load JSON data into a dictionary
-            return json.load(f)
-    except FileNotFoundError:
-        print('Cannot open data/servers_settings.json: File not found.')
-        # If the file doesn't exist, return an empty dictionary
-        return {}
-
-# Store users who want to be notified in a dictionary {guild_id: set(user_ids)}
-# Load the data from the JSON file when the bot starts
-servers_settings = load_servers_settings()
-
-# Save the current notify data to a JSON file
 def save_servers_settings():
-    save_json_atomic(
-        'data/servers_settings.json',
+    save_settings_table(
+        'server_settings',
+        'guild_id',
         servers_settings
     )
-
-# endregion
 
 # endregion
 
