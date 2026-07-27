@@ -14,6 +14,8 @@ import builtins
 from enum import Enum
 from typing import List
 from cryptography.fernet import Fernet, InvalidToken
+import tempfile
+import fcntl
 # import signal
 
 # Define intents
@@ -109,20 +111,51 @@ def load_members_settings():
 members_settings = load_members_settings()
 
 def save_json_atomic(file_path: str, data: dict):
-    temporary_path = file_path + '.tmp'
+    directory = os.path.dirname(file_path)
+    filename = os.path.basename(file_path)
+    lock_path = file_path + '.lock'
 
-    with open(temporary_path, 'w', encoding='utf-8') as f:
-        json.dump(
-            data,
-            f,
-            indent=4,
-            ensure_ascii=False
-        )
+    os.makedirs(directory, exist_ok=True)
 
-        f.flush()
-        os.fsync(f.fileno())
+    with open(lock_path, 'w', encoding='utf-8') as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
 
-    os.replace(temporary_path, file_path)
+        temporary_path = None
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode='w',
+                encoding='utf-8',
+                dir=directory,
+                prefix=filename + '.',
+                suffix='.tmp',
+                delete=False
+            ) as temporary_file:
+                temporary_path = temporary_file.name
+
+                json.dump(
+                    data,
+                    temporary_file,
+                    indent=4,
+                    ensure_ascii=False
+                )
+
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+
+            os.replace(temporary_path, file_path)
+
+        finally:
+            if (
+                temporary_path is not None
+                and os.path.exists(temporary_path)
+            ):
+                os.remove(temporary_path)
+
+            fcntl.flock(
+                lock_file.fileno(),
+                fcntl.LOCK_UN
+            )
 
 
 # Save the current notify data to a JSON file
