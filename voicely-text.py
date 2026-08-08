@@ -680,17 +680,10 @@ async def process_message(ctx: commands.Context | discord.Message, text: str, ac
         print(f"{ctx.guild.id}: Added message to queue for {ctx.author.id}: {message_content}")
 
 @bot.event
-@bot.event
 async def on_message(message: discord.Message):
-    if (
-        message.guild is not None
-        and isinstance(message.author, discord.Member)
-        and message.author.id in bot.members_to_read
-        and message.author.voice is not None
-        and message.author.voice.channel is message.channel
-    ):
+    if message.author.id in bot.members_to_read and message.author.voice.channel is message.channel:
         await process_message(message, message.content)
-
+    
     await bot.process_commands(message)
 
 @bot.event
