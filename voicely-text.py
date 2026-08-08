@@ -497,9 +497,19 @@ async def process_queue(guild: discord.Guild):
             # endregion
 
             # Convert the text to speech using gTTS
-            tts = gTTS(text=text, lang=accent, tld=region)
-            tts.save(f"voice_files/{guild_id}-tts.mp3")
-            
+            # Convert the text to speech using gTTS
+            try:
+                tts = gTTS(text=text, lang=accent, tld=region)
+                tts.save(f"voice_files/{guild_id}-tts.mp3")
+            except Exception as error:
+                print(
+                    f"{guild.id}: Failed to generate TTS for message: {text}\n"
+                    f"    {type(error).__name__}: {error}"
+                )
+
+                bot.queue[guild_id]["queue"].task_done()
+                continue
+
             voice_client: discord.VoiceClient | None = guild.voice_client
 
             try:
@@ -653,7 +663,9 @@ async def process_message(ctx: commands.Context | discord.Message, text: str, ac
     # Replaces it with an empty string
     message_content = re.sub(r'\d{8,}', "", message_content)
     
-    if message_content == "" or re.match(r'^[\s\t\n\.\[\]\(\)!;:?,¡¿]+$', message_content, re.MULTILINE) != None:
+    message_content = message_content.strip()
+
+    if not message_content or re.fullmatch(r'[\s\.\[\]\(\)!;:?,¡¿]+', message_content):
         print(f"{ctx.guild.id}: Message contains no text, skipping.")
         return
 
@@ -668,10 +680,17 @@ async def process_message(ctx: commands.Context | discord.Message, text: str, ac
         print(f"{ctx.guild.id}: Added message to queue for {ctx.author.id}: {message_content}")
 
 @bot.event
+@bot.event
 async def on_message(message: discord.Message):
-    if message.author.id in bot.members_to_read and message.author.voice.channel is message.channel:
+    if (
+        message.guild is not None
+        and isinstance(message.author, discord.Member)
+        and message.author.id in bot.members_to_read
+        and message.author.voice is not None
+        and message.author.voice.channel is message.channel
+    ):
         await process_message(message, message.content)
-    
+
     await bot.process_commands(message)
 
 @bot.event
