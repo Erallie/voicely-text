@@ -2057,7 +2057,7 @@ async def autoread(ctx: commands.Context, enabled: to_lower):
 
 @server.command()
 @app_commands.describe(
-    enabled="Type 'enabled' or 'disabled'. Or type 'reset' to reset to default."
+    enabled="Type 'true' or 'false'. Or type 'reset' to reset to default."
 )
 async def voicelytranslate(ctx: commands.Context, enabled: to_lower):
     """Set whether messages from Voicely Translate are read."""
@@ -2074,14 +2074,14 @@ async def voicelytranslate(ctx: commands.Context, enabled: to_lower):
     guild_id_str = str(guild.id)
 
     match enabled:
-        case "enabled":
+        case "true":
             enabled_bool = True
             confirm_message = (
                 f"Voicely Translate compatibility has been **enabled** for {guild.name}.\n\n"
                 "I will read translations sent by Voicely Translate."
             )
 
-        case "disabled":
+        case "false":
             enabled_bool = False
             confirm_message = (
                 f"Voicely Translate compatibility has been **disabled** for {guild.name}.\n\n"
@@ -2103,9 +2103,9 @@ async def voicelytranslate(ctx: commands.Context, enabled: to_lower):
             save_servers_settings()
 
             if default:
-                default_text = "enabled"
+                default_text = "true"
             else:
-                default_text = "disabled"
+                default_text = "false"
 
             await ctx.send(
                 f"Voicely Translate compatibility for {guild.name} has been "
@@ -2117,7 +2117,7 @@ async def voicelytranslate(ctx: commands.Context, enabled: to_lower):
 
         case _:
             await ctx.send(
-                "`enabled` must be set to either `enabled` or `disabled`. "
+                "`enabled` must be set to either `true` or `false`. "
                 "Alternatively, enter `reset` to set to default.",
                 reference=ctx.message,
                 ephemeral=True
