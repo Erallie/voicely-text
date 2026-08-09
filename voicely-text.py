@@ -17,15 +17,6 @@ from cryptography.fernet import Fernet, InvalidToken
 import sqlite3
 # import signal
 
-
-def log_event(guild_id, event, details=""):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-
-    if details:
-        print(f"[{timestamp}] {guild_id}: {event} | {details}")
-    else:
-        print(f"[{timestamp}] {guild_id}: {event}")
-
 # Define intents
 intents = discord.Intents.default()
 intents.message_content = True
@@ -405,25 +396,10 @@ def return_nickname(user: discord.User | discord.Member, guild_id: int):
 
 async def process_queue(guild: discord.Guild):
     while True:
-        log_event(
-            guild.id,
-            "QUEUE WAIT",
-            f"size={bot.queue[guild.id]['queue'].qsize()}"
-        )
+        print(f"{guild.id}: Waiting for the next message in the queue for...")
         message, text, user, voice_channel, accent_override, tld_override, speaker_id = await bot.queue[guild.id]["queue"].get()
         guild_id = guild.id
         user_id = user.id
-
-        log_event(
-            guild.id,
-            "QUEUE GET",
-            (
-                f"author={user.id} | "
-                f"speaker={speaker_id if speaker_id else user.id} | "
-                f"remaining={bot.queue[guild.id]['queue'].qsize()} | "
-                f"text={text!r}"
-            )
-        )
 
         def should_play():
             if not guild_id in bot.to_skip:
@@ -472,11 +448,7 @@ async def process_queue(guild: discord.Guild):
         bot.active_timeouts[guild_id]
         # endregion
 
-        log_event(
-            guild.id,
-            "PROCESSING MESSAGE",
-            f"author={user.id} | speaker={speaker_id if speaker_id else user.id} | text={text!r}"
-        )
+        print(f"{guild.id}: Processing message: {text}")
         
         # region set accent and region
         user_id_str = str(user_id)
@@ -543,19 +515,12 @@ async def process_queue(guild: discord.Guild):
             # Convert the text to speech using gTTS
             # Convert the text to speech using gTTS
             try:
-                log_event(
-                    guild.id,
-                    "TTS GENERATION START",
-                    f"accent={accent} | tld={region} | text={text!r}"
-                )
                 tts = gTTS(text=text, lang=accent, tld=region)
                 tts.save(f"voice_files/{guild_id}-tts.mp3")
-                log_event(guild.id, "TTS GENERATION SUCCESS", f"text={text!r}")
             except Exception as error:
-                log_event(
-                    guild.id,
-                    "TTS GENERATION FAILED",
-                    f"type={type(error).__name__} | error={error!r} | text={text!r}"
+                print(
+                    f"{guild.id}: Failed to generate TTS for message: {text}\n"
+                    f"    {type(error).__name__}: {error}"
                 )
 
                 bot.queue[guild_id]["queue"].task_done()
@@ -563,86 +528,31 @@ async def process_queue(guild: discord.Guild):
 
             voice_client: discord.VoiceClient | None = guild.voice_client
 
-            log_event(
-                guild.id,
-                "VOICE STATE BEFORE CONNECT",
-                (
-                    f"client_exists={voice_client is not None} | "
-                    f"connected={voice_client.is_connected() if voice_client else False} | "
-                    f"playing={voice_client.is_playing() if voice_client else False} | "
-                    f"current_channel={voice_client.channel.id if voice_client and voice_client.channel else None} | "
-                    f"target_channel={voice_channel.id}"
-                )
-            )
-
             try:
                 if voice_client and voice_client.channel != voice_channel:
-                    log_event(
-                        guild.id,
-                        "VOICE MOVE ATTEMPT",
-                        f"from={voice_client.channel.id if voice_client.channel else None} | to={voice_channel.id}"
-                    )
+                    print(f"{guild.id}: Moving to voice channel {voice_channel.id}...")
                     await voice_client.move_to(voice_channel)
-                    log_event(
-                        guild.id,
-                        "VOICE MOVE SUCCESS",
-                        f"channel={voice_client.channel.id if voice_client.channel else None}"
-                    )
 
                 elif not voice_client or not voice_client.is_connected():
-                    log_event(
-                        guild.id,
-                        "VOICE CONNECT ATTEMPT",
-                        f"channel={voice_channel.id} | existing_client={voice_client!r}"
-                    )
+                    print(f"{guild.id}: Connecting to voice channel {voice_channel.id}...")
 
                     if voice_client:
                         try:
-                            log_event(guild.id, "VOICE STALE CLIENT DISCONNECT ATTEMPT", f"client={voice_client!r}")
                             await voice_client.disconnect(force=True)
-                            log_event(guild.id, "VOICE STALE CLIENT DISCONNECT SUCCESS")
-                        except Exception as disconnect_error:
-                            log_event(
-                                guild.id,
-                                "VOICE STALE CLIENT DISCONNECT FAILED",
-                                f"type={type(disconnect_error).__name__} | error={disconnect_error!r}"
-                            )
+                        except Exception:
+                            pass
 
                     voice_client = await voice_channel.connect(
                         timeout=30.0,
                         reconnect=True
                     )
 
-                    log_event(
-                        guild.id,
-                        "VOICE CONNECT SUCCESS",
-                        (
-                            f"connected={voice_client.is_connected()} | "
-                            f"channel={voice_client.channel.id if voice_client.channel else None} | "
-                            f"client={voice_client!r}"
-                        )
-                    )
-
-                else:
-                    log_event(
-                        guild.id,
-                        "VOICE CONNECTION REUSED",
-                        (
-                            f"connected={voice_client.is_connected()} | "
-                            f"channel={voice_client.channel.id if voice_client.channel else None} | "
-                            f"client={voice_client!r}"
-                        )
-                    )
+                    print(f"{guild.id}: Connected to voice channel {voice_channel.id}.")
 
             except Exception as error:
-                log_event(
-                    guild.id,
-                    "VOICE CONNECT FAILED",
-                    (
-                        f"type={type(error).__name__} | "
-                        f"error={error!r} | "
-                        f"guild_voice_client={guild.voice_client!r}"
-                    )
+                print(
+                    f"{guild.id}: Failed to connect to voice channel: "
+                    f"{type(error).__name__}: {error}"
                 )
 
                 bot.queue[guild_id]["queue"].task_done()
@@ -657,13 +567,7 @@ async def process_queue(guild: discord.Guild):
             if voice_client and voice_client.is_connected():
                 def after_playing(error):
                     if error:
-                        log_event(
-                            guild.id,
-                            "PLAYBACK CALLBACK ERROR",
-                            f"type={type(error).__name__} | error={error!r}"
-                        )
-                    else:
-                        log_event(guild.id, "PLAYBACK CALLBACK SUCCESS")
+                        print(f"{guild.id}: Error occurred during playback: {error}")
 
                     # region add last_speakers
                     if guild_id in bot.last_speakers:
@@ -679,65 +583,28 @@ async def process_queue(guild: discord.Guild):
                     # Clean up the audio file
                     try:
                         os.remove(f"voice_files/{guild_id}-tts.mp3")
-                        log_event(guild.id, "TTS FILE CLEANUP SUCCESS")
+                        print(f"{guild.id}: Cleaned up the TTS file")
                     except OSError as remove_error:
-                        log_event(
-                            guild.id,
-                            "TTS FILE CLEANUP FAILED",
-                            f"type={type(remove_error).__name__} | error={remove_error!r}"
-                        )
+                        print(f"{guild.id}: Error cleaning up the TTS file:\n\t{remove_error}")
                     finally:    
                         # Indicate that the current task is done
                         bot.loop.call_soon_threadsafe(bot.queue[guild_id]["queue"].task_done)
 
                 # Play the audio file in the voice channel
-                log_event(
-                    guild.id,
-                    "PLAYBACK START",
-                    (
-                        f"message_channel={message.channel.id} | "
-                        f"voice_channel={voice_client.channel.id if voice_client.channel else None} | "
-                        f"connected={voice_client.is_connected()} | "
-                        f"playing_before={voice_client.is_playing()} | "
-                        f"queue_remaining={bot.queue[guild.id]['queue'].qsize()} | "
-                        f"text={text!r}"
-                    )
-                )
+                print(f"{guild.id}: Playing the TTS message in {message.channel.id}...")
                 voice_client.play(discord.FFmpegPCMAudio(f"voice_files/{guild_id}-tts.mp3", executable='bot-env/ffmpeg/bin/ffmpeg'), after=after_playing)
-                log_event(
-                    guild.id,
-                    "PLAYBACK STARTED",
-                    f"connected={voice_client.is_connected()} | playing={voice_client.is_playing()}"
-                )
                 # ffmpeg currently uses version 7.1 on windows and 7.0.2 on linux
 
                 # Wait until the current message is finished playing
                 while voice_client.is_playing() and should_play():
                     await asyncio.sleep(1)
-
-                log_event(
-                    guild.id,
-                    "PLAYBACK WAIT FINISHED",
-                    (
-                        f"connected={voice_client.is_connected()} | "
-                        f"playing={voice_client.is_playing()} | "
-                        f"should_play={should_play()} | "
-                        f"queue_remaining={bot.queue[guild.id]['queue'].qsize()}"
-                    )
-                )
-
                 if not should_play():
                     decrement_skips()
-                    log_event(guild.id, "PLAYBACK STOP REQUESTED", "reason=skip")
                     voice_client.stop()
 
-                log_event(guild.id, "PLAYBACK LOOP COMPLETE", f"text={text!r}")
+                print(f"{guild.id}: Audio finished playing")
             else:
-                log_event(
-                    guild.id,
-                    "VOICE CLIENT NOT CONNECTED",
-                    f"client={voice_client!r} | queue_remaining={bot.queue[guild.id]['queue'].qsize()}"
-                )
+                print(f"{guild.id}: Voice client is not connected; task done")
                 bot.queue[guild_id]["queue"].task_done()
 
 # region When a message is sent
@@ -840,18 +707,7 @@ async def process_message(
             tld,
             speaker_id
         ))
-        log_event(
-            ctx.guild.id,
-            "QUEUE ADD",
-            (
-                f"author={ctx.author.id} | "
-                f"speaker={speaker_id if speaker_id else ctx.author.id} | "
-                f"accent={accent} | "
-                f"tld={tld} | "
-                f"queue_size={bot.queue[ctx.guild.id]['queue'].qsize()} | "
-                f"text={message_content!r}"
-            )
-        )
+        print(f"{ctx.guild.id}: Added message to queue for {ctx.author.id}: {message_content}")
 
 TRANSLATION_BOT_ID = 1535789654974930964
 
@@ -976,25 +832,11 @@ def parse_translation_message(content: str):
     return speaker_id, translations
 
 async def process_translation_message(message: discord.Message):
-    log_event(
-        message.guild.id,
-        "TRANSLATION RECEIVED",
-        f"message_id={message.id} | content={message.content!r}"
-    )
-
     speaker_id, translations = parse_translation_message(message.content)
 
-    log_event(
-        message.guild.id,
-        "TRANSLATION PARSED",
-        f"message_id={message.id} | speaker={speaker_id} | translations={translations!r}"
-    )
-
     if not speaker_id or not translations:
-        log_event(
-            message.guild.id,
-            "TRANSLATION PARSE FAILED",
-            f"message_id={message.id} | content={message.content!r}"
+        print(
+            f"{message.guild.id}: Translation message contained no readable translations."
         )
         return
 
@@ -1020,19 +862,6 @@ async def process_translation_message(message: discord.Message):
 
         region = get_translation_region(language_tag)
 
-        log_event(
-            message.guild.id,
-            "TRANSLATION QUEUEING",
-            (
-                f"message_id={message.id} | "
-                f"speaker={speaker_id} | "
-                f"language={language_tag} | "
-                f"accent={accent} | "
-                f"tld={region} | "
-                f"text={translated_text!r}"
-            )
-        )
-
         await process_message(
             message,
             translated_text,
@@ -1044,23 +873,12 @@ async def process_translation_message(message: discord.Message):
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.id == TRANSLATION_BOT_ID:
-        if message.guild:
-            compatibility_enabled = voicely_translate_enabled(message.guild)
-            is_translation_message = message.content.startswith("### 🗣️")
-
-            log_event(
-                message.guild.id,
-                "TRANSLATION BOT MESSAGE",
-                (
-                    f"message_id={message.id} | "
-                    f"compatibility_enabled={compatibility_enabled} | "
-                    f"is_translation_message={is_translation_message} | "
-                    f"content={message.content!r}"
-                )
-            )
-
-            if compatibility_enabled and is_translation_message:
-                await process_translation_message(message)
+        if (
+            message.guild
+            and voicely_translate_enabled(message.guild)
+            and message.content.startswith("### 🗣️")
+        ):
+            await process_translation_message(message)
 
         await bot.process_commands(message)
         return
@@ -1117,13 +935,8 @@ async def check_empty_channel(guild: discord.Guild):
         if guild.voice_client:
             voice_channel = guild.voice_client.channel
             if len(voice_channel.members) == 1:
-                log_event(
-                    guild.id,
-                    "VOICE DISCONNECT ATTEMPT",
-                    f"reason=empty_channel | channel={voice_channel.id}"
-                )
                 await guild.voice_client.disconnect()
-                log_event(guild.id, "VOICE DISCONNECT SUCCESS", "reason=empty_channel")
+                print(f"{guild.id}: Disconnected from voice channel as it was empty.")
                 del bot.active_timeouts[guild.id]
         await asyncio.sleep(60)  # Check every 60 seconds
 
@@ -1141,21 +954,13 @@ async def leave_after_timeout(guild: discord.Guild):
         else:
             timeout = bot.default_settings["timeout"]
         
-        log_event(guild.id, "TIMEOUT SET", f"seconds={timeout}")
+        print(f'Timeout set for {guild.id}.')
         await asyncio.sleep(timeout)
         if guild.voice_client:
-            log_event(
-                guild.id,
-                "VOICE DISCONNECT ATTEMPT",
-                (
-                    f"reason=timeout | "
-                    f"channel={guild.voice_client.channel.id if guild.voice_client.channel else None}"
-                )
-            )
             await guild.voice_client.disconnect()
-            log_event(guild.id, "VOICE DISCONNECT SUCCESS", "reason=timeout")
+            print(f'Disconnected from {guild.id} due to timeout.')
     except asyncio.CancelledError:
-        log_event(guild.id, "TIMEOUT CANCELLED")
+        print(f'Timeout cancelled for {guild.id}')
 
 # endregion
 
