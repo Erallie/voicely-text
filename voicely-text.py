@@ -845,13 +845,14 @@ async def process_translation_message(message: discord.Message):
 
 @bot.event
 async def on_message(message: discord.Message):
-    if (
-        message.author.id == TRANSLATION_BOT_ID
-        and message.content.startswith("🗣️")
-    ):
-        await process_translation_message(message)
+    if message.author.id == TRANSLATION_BOT_ID:
+        if message.content.startswith("🗣️"):
+            await process_translation_message(message)
 
-    elif (
+        await bot.process_commands(message)
+        return
+
+    if (
         message.author.id in bot.members_to_read
         and message.author.voice
         and message.author.voice.channel is message.channel
