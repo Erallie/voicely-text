@@ -39,8 +39,8 @@ class Bot(commands.Bot):
             "accent": "en",
             "region": "com",
             "autoread": False,
-            "timeout": 300
-            # "prefix": "!"
+            "timeout": 300,
+            "voicely_translate": True
         }
         self.active_timeouts = {}
         self.last_speakers = {}
@@ -711,6 +711,17 @@ async def process_message(
 
 TRANSLATION_BOT_ID = 1535789654974930964
 
+def voicely_translate_enabled(guild: discord.Guild):
+    guild_id_str = str(guild.id)
+
+    if (
+        guild_id_str in servers_settings
+        and "voicely_translate" in servers_settings[guild_id_str]
+    ):
+        return servers_settings[guild_id_str]["voicely_translate"]
+
+    return bot.default_settings["voicely_translate"]
+
 TRANSLATION_LANGUAGE_REGIONS = {
     "af": "co.za",
     "ar": "com",
@@ -861,13 +872,18 @@ async def process_translation_message(message: discord.Message):
 
 @bot.event
 async def on_message(message: discord.Message):
-    if (
-        message.author.id == TRANSLATION_BOT_ID
-        and message.content.startswith("### 🗣️")
-    ):
-        await process_translation_message(message)
+    if message.author.id == TRANSLATION_BOT_ID:
+        if (
+            message.guild
+            and voicely_translate_enabled(message.guild)
+            and message.content.startswith("### 🗣️")
+        ):
+            await process_translation_message(message)
 
-    elif (
+        await bot.process_commands(message)
+        return
+
+    if (
         message.author.id in bot.members_to_read
         and message.author.voice
         and message.author.voice.channel is message.channel
@@ -2034,6 +2050,92 @@ async def autoread(ctx: commands.Context, enabled: to_lower):
     
     save_servers_settings()
     await ctx.send(confirm_message, reference=ctx.message, ephemeral=True)
+
+# endregion
+
+# region Voicely Translate
+
+@server.command()
+@app_commands.describe(
+    enabled="Type 'enabled' or 'disabled'. Or type 'reset' to reset to default."
+)
+async def voicelytranslate(ctx: commands.Context, enabled: to_lower):
+    """Set whether messages from Voicely Translate are read."""
+
+    if ctx.guild is None:
+        await send_dm_error(ctx)
+        return
+
+    if not is_admin(ctx):
+        await send_admin_error(ctx)
+        return
+
+    guild = ctx.guild
+    guild_id_str = str(guild.id)
+
+    match enabled:
+        case "enabled":
+            enabled_bool = True
+            confirm_message = (
+                f"Voicely Translate compatibility has been **enabled** for {guild.name}.\n\n"
+                "I will read translations sent by Voicely Translate."
+            )
+
+        case "disabled":
+            enabled_bool = False
+            confirm_message = (
+                f"Voicely Translate compatibility has been **disabled** for {guild.name}.\n\n"
+                "I will no longer read translations sent by Voicely Translate."
+            )
+
+        case "reset":
+            if (
+                guild_id_str in servers_settings
+                and "voicely_translate" in servers_settings[guild_id_str]
+            ):
+                del servers_settings[guild_id_str]["voicely_translate"]
+
+                if len(servers_settings[guild_id_str]) == 0:
+                    del servers_settings[guild_id_str]
+
+            default = bot.default_settings["voicely_translate"]
+
+            save_servers_settings()
+
+            if default:
+                default_text = "enabled"
+            else:
+                default_text = "disabled"
+
+            await ctx.send(
+                f"Voicely Translate compatibility for {guild.name} has been "
+                f"**reset** to default: `{default_text}`",
+                reference=ctx.message,
+                ephemeral=True
+            )
+            return
+
+        case _:
+            await ctx.send(
+                "`enabled` must be set to either `enabled` or `disabled`. "
+                "Alternatively, enter `reset` to set to default.",
+                reference=ctx.message,
+                ephemeral=True
+            )
+            return
+
+    if guild_id_str not in servers_settings:
+        servers_settings[guild_id_str] = {}
+
+    servers_settings[guild_id_str]["voicely_translate"] = enabled_bool
+
+    save_servers_settings()
+
+    await ctx.send(
+        confirm_message,
+        reference=ctx.message,
+        ephemeral=True
+    )
 
 # endregion
 
