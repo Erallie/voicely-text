@@ -863,7 +863,7 @@ async def process_translation_message(message: discord.Message):
 async def on_message(message: discord.Message):
     if (
         message.author.id == TRANSLATION_BOT_ID
-        and message.content.startswith("🗣️")
+        and message.content.startswith("### 🗣️")
     ):
         await process_translation_message(message)
 
