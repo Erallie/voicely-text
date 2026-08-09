@@ -397,7 +397,7 @@ def return_nickname(user: discord.User | discord.Member, guild_id: int):
 async def process_queue(guild: discord.Guild):
     while True:
         print(f"{guild.id}: Waiting for the next message in the queue for...")
-        message, text, user, voice_channel, accent_override, tld_override, speaker_override = await bot.queue[guild.id]["queue"].get()
+        message, text, user, voice_channel, accent_override, tld_override, speaker_id = await bot.queue[guild.id]["queue"].get()
         guild_id = guild.id
         user_id = user.id
 
@@ -485,12 +485,19 @@ async def process_queue(guild: discord.Guild):
         else:
 
             # region Prepend display name
-            if speaker_override:
-                nickname = speaker_override
-                speaker_id = f"translation:{speaker_override}"
+            if speaker_id:
+                speaker = guild.get_member(speaker_id)
+
+                if speaker is None:
+                    speaker = bot.get_user(speaker_id)
+
+                if speaker is not None:
+                    nickname = return_nickname(speaker, guild_id)
+                else:
+                    nickname = "unknown user"
             else:
-                nickname = return_nickname(user, guild_id)
                 speaker_id = user_id
+                nickname = return_nickname(user, guild_id)
 
             if (
                 guild_id in bot.last_speakers
@@ -607,7 +614,7 @@ async def process_message(
     text: str,
     accent: str = None,
     tld: str = None,
-    speaker_override: str = None
+    speaker_id: int = None
 ):
     if ctx.author == bot.user or not ctx.guild:
         return
@@ -698,7 +705,7 @@ async def process_message(
             voice_channel,
             accent,
             tld,
-            speaker_override
+            speaker_id
         ))
         print(f"{ctx.guild.id}: Added message to queue for {ctx.author.id}: {message_content}")
 
@@ -764,32 +771,42 @@ def get_translation_region(language_tag: str):
 
 
 def parse_translation_message(content: str):
-    # Get the first bold section as the speaker's name.
-    speaker_match = re.search(r'\*\*(.+?)\*\*', content)
+    lines = content.splitlines()
+
+    if not lines or not lines[0].startswith("### 🗣️"):
+        return None, []
+
+    speaker_text = lines[0][len("### 🗣️"):].strip()
+
+    speaker_match = re.fullmatch(r'<@!?(\d{17,20})>', speaker_text)
 
     if not speaker_match:
         return None, []
 
-    speaker = speaker_match.group(1).strip()
-
-    # Matches headings such as:
-    # **Original · en**
-    # **ja**
-    # **es**
-    # **fr**
-    section_pattern = re.compile(
-        r'\*\*(Original\s*·\s*)?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?)\*\*\s*\n'
-        r'(.*?)(?=\n\s*\*\*(?:Original\s*·\s*)?[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?\*\*|\Z)',
-        re.DOTALL | re.IGNORECASE
-    )
+    speaker_id = int(speaker_match.group(1))
 
     translations = []
 
-    for match in section_pattern.finditer(content):
+    # Matches:
+    # **Original · `en`:** Words to translate
+    # **`es`:** Palabras para traducir
+    # **`ja`:** 翻訳する言葉
+    section_pattern = re.compile(
+        r'^\*\*(Original\s*·\s*)?`([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?)`:\*\*\s*(.*)$',
+        re.IGNORECASE
+    )
+
+    for line in lines[1:]:
+        match = section_pattern.match(line.strip())
+
+        if not match:
+            continue
+
         is_original = match.group(1) is not None
         language_tag = match.group(2).lower()
         translated_text = match.group(3).strip()
 
+        # Never read the original text.
         if is_original:
             continue
 
@@ -801,12 +818,12 @@ def parse_translation_message(content: str):
             "text": translated_text
         })
 
-    return speaker, translations
+    return speaker_id, translations
 
 async def process_translation_message(message: discord.Message):
-    speaker, translations = parse_translation_message(message.content)
+    speaker_id, translations = parse_translation_message(message.content)
 
-    if not speaker or not translations:
+    if not speaker_id or not translations:
         print(
             f"{message.guild.id}: Translation message contained no readable translations."
         )
@@ -818,7 +835,6 @@ async def process_translation_message(message: discord.Message):
         language_tag = translation["language"]
         translated_text = translation["text"]
 
-        # gTTS generally uses the base language for tags such as en-US.
         accent = language_tag.lower()
 
         if accent not in supported_languages:
@@ -840,7 +856,7 @@ async def process_translation_message(message: discord.Message):
             translated_text,
             accent=accent,
             tld=region,
-            speaker_override=speaker
+            speaker_id=speaker_id
         )
 
 @bot.event
