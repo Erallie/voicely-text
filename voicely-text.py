@@ -397,7 +397,7 @@ def return_nickname(user: discord.User | discord.Member, guild_id: int):
 async def process_queue(guild: discord.Guild):
     while True:
         print(f"{guild.id}: Waiting for the next message in the queue for...")
-        message, text, user, voice_channel, accent_override, tld_override = await bot.queue[guild.id]["queue"].get()
+        message, text, user, voice_channel, accent_override, tld_override, speaker_override = await bot.queue[guild.id]["queue"].get()
         guild_id = guild.id
         user_id = user.id
 
@@ -485,8 +485,11 @@ async def process_queue(guild: discord.Guild):
         else:
 
             # region Prepend display name
-            nickname = return_nickname(user, guild_id)
-            
+            if speaker_override:
+                nickname = speaker_override
+            else:
+                nickname = return_nickname(user, guild_id)
+
             if guild_id in bot.last_speakers and user_id is bot.last_speakers[guild_id]["user_id"]:
                 last_time: datetime.datetime = bot.last_speakers[guild_id]["time"]
                 time_diff = datetime.datetime.today() - last_time
@@ -593,7 +596,13 @@ async def process_queue(guild: discord.Guild):
 
 # region When a message is sent
 
-async def process_message(ctx: commands.Context | discord.Message, text: str, accent: str = None, tld: str = None):
+async def process_message(
+    ctx: commands.Context | discord.Message,
+    text: str,
+    accent: str = None,
+    tld: str = None,
+    speaker_override: str = None
+):
     if ctx.author == bot.user or not ctx.guild:
         return
 
@@ -676,14 +685,170 @@ async def process_message(ctx: commands.Context | discord.Message, text: str, ac
 
     if voice_channel:
         # Add the filtered message content to the queue
-        await bot.queue[ctx.guild.id]["queue"].put((message, message_content, ctx.author, voice_channel, accent, tld))
+        await bot.queue[ctx.guild.id]["queue"].put((
+            message,
+            message_content,
+            ctx.author,
+            voice_channel,
+            accent,
+            tld,
+            speaker_override
+        ))
         print(f"{ctx.guild.id}: Added message to queue for {ctx.author.id}: {message_content}")
+
+TRANSLATION_BOT_ID = 1535789654974930964
+
+TRANSLATION_LANGUAGE_REGIONS = {
+    "af": "co.za",
+    "ar": "com",
+    "bg": "bg",
+    "bn": "com",
+    "ca": "es",
+    "cs": "cz",
+    "cy": "co.uk",
+    "da": "dk",
+    "de": "de",
+    "el": "gr",
+    "en": "com",
+    "es": "es",
+    "et": "ee",
+    "fi": "fi",
+    "fr": "fr",
+    "gu": "co.in",
+    "hi": "co.in",
+    "hr": "hr",
+    "hu": "hu",
+    "id": "co.id",
+    "is": "is",
+    "it": "it",
+    "ja": "co.jp",
+    "kn": "co.in",
+    "ko": "co.kr",
+    "lt": "lt",
+    "lv": "lv",
+    "ml": "co.in",
+    "mr": "co.in",
+    "ms": "com.my",
+    "nl": "nl",
+    "no": "no",
+    "pl": "pl",
+    "pt": "pt",
+    "ro": "ro",
+    "ru": "ru",
+    "sk": "sk",
+    "sl": "si",
+    "sq": "al",
+    "sr": "rs",
+    "sv": "se",
+    "sw": "co.ke",
+    "ta": "co.in",
+    "te": "co.in",
+    "th": "co.th",
+    "tr": "com.tr",
+    "uk": "com.ua",
+    "ur": "com.pk",
+    "vi": "com.vn",
+    "zh": "com"
+}
+
+
+def get_translation_region(language_tag: str):
+    base_language = language_tag.lower().split("-")[0]
+    return TRANSLATION_LANGUAGE_REGIONS.get(base_language, "com")
+
+
+def parse_translation_message(content: str):
+    # Get the first bold section as the speaker's name.
+    speaker_match = re.search(r'\*\*(.+?)\*\*', content)
+
+    if not speaker_match:
+        return None, []
+
+    speaker = speaker_match.group(1).strip()
+
+    # Matches headings such as:
+    # **Original · en**
+    # **ja**
+    # **es**
+    # **fr**
+    section_pattern = re.compile(
+        r'\*\*(Original\s*·\s*)?([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?)\*\*\s*\n'
+        r'(.*?)(?=\n\s*\*\*(?:Original\s*·\s*)?[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?\*\*|\Z)',
+        re.DOTALL | re.IGNORECASE
+    )
+
+    translations = []
+
+    for match in section_pattern.finditer(content):
+        is_original = match.group(1) is not None
+        language_tag = match.group(2).lower()
+        translated_text = match.group(3).strip()
+
+        if is_original:
+            continue
+
+        if not translated_text:
+            continue
+
+        translations.append({
+            "language": language_tag,
+            "text": translated_text
+        })
+
+    return speaker, translations
+
+async def process_translation_message(message: discord.Message):
+    speaker, translations = parse_translation_message(message.content)
+
+    if not speaker or not translations:
+        print(
+            f"{message.guild.id}: Translation message contained no readable translations."
+        )
+        return
+
+    supported_languages = lang.tts_langs()
+
+    for translation in translations:
+        language_tag = translation["language"]
+        translated_text = translation["text"]
+
+        # gTTS generally uses the base language for tags such as en-US.
+        accent = language_tag.lower()
+
+        if accent not in supported_languages:
+            base_language = accent.split("-")[0]
+
+            if base_language in supported_languages:
+                accent = base_language
+            else:
+                print(
+                    f"{message.guild.id}: Unsupported translation language "
+                    f"'{language_tag}', skipping."
+                )
+                continue
+
+        region = get_translation_region(language_tag)
+
+        await process_message(
+            message,
+            translated_text,
+            accent=accent,
+            tld=region,
+            speaker_override=speaker
+        )
 
 @bot.event
 async def on_message(message: discord.Message):
-    if message.author.id in bot.members_to_read and message.author.voice.channel is message.channel:
+    if message.author.id == TRANSLATION_BOT_ID:
+        await process_translation_message(message)
+
+    elif (
+        message.author.id in bot.members_to_read
+        and message.author.voice
+        and message.author.voice.channel is message.channel
+    ):
         await process_message(message, message.content)
-    
+
     await bot.process_commands(message)
 
 @bot.event
