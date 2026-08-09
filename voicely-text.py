@@ -487,12 +487,18 @@ async def process_queue(guild: discord.Guild):
             # region Prepend display name
             if speaker_override:
                 nickname = speaker_override
+                speaker_id = f"translation:{speaker_override}"
             else:
                 nickname = return_nickname(user, guild_id)
+                speaker_id = user_id
 
-            if guild_id in bot.last_speakers and user_id is bot.last_speakers[guild_id]["user_id"]:
+            if (
+                guild_id in bot.last_speakers
+                and speaker_id == bot.last_speakers[guild_id]["speaker_id"]
+            ):
                 last_time: datetime.datetime = bot.last_speakers[guild_id]["time"]
                 time_diff = datetime.datetime.today() - last_time
+
                 if time_diff.total_seconds() > 30:
                     text = nickname + ' says, ' + text
             else:
@@ -558,11 +564,11 @@ async def process_queue(guild: discord.Guild):
 
                     # region add last_speakers
                     if guild_id in bot.last_speakers:
-                        bot.last_speakers[guild_id]["user_id"] = user_id
+                        bot.last_speakers[guild_id]["speaker_id"] = speaker_id
                         bot.last_speakers[guild_id]["time"] = datetime.datetime.today()
                     else:
                         bot.last_speakers[guild_id] = {
-                            "user_id": user_id,
+                            "speaker_id": speaker_id,
                             "time": datetime.datetime.today()
                         }
                     # endregion
