@@ -15,7 +15,6 @@ from enum import Enum
 from typing import List
 from cryptography.fernet import Fernet, InvalidToken
 import sqlite3
-import uuid
 # import signal
 
 # Define intents
@@ -401,7 +400,6 @@ async def process_queue(guild: discord.Guild):
         message, text, user, voice_channel, accent_override, tld_override, speaker_id = await bot.queue[guild.id]["queue"].get()
         guild_id = guild.id
         user_id = user.id
-        tts_file = f"voice_files/{guild_id}-{uuid.uuid4().hex}.mp3"
 
         def should_play():
             if not guild_id in bot.to_skip:
@@ -518,7 +516,7 @@ async def process_queue(guild: discord.Guild):
             # Convert the text to speech using gTTS
             try:
                 tts = gTTS(text=text, lang=accent, tld=region)
-                tts.save(tts_file)
+                tts.save(f"voice_files/{guild_id}-tts.mp3")
             except Exception as error:
                 print(
                     f"{guild.id}: Failed to generate TTS for message: {text}\n"
@@ -560,7 +558,7 @@ async def process_queue(guild: discord.Guild):
                 bot.queue[guild_id]["queue"].task_done()
 
                 try:
-                    os.remove(tts_file)
+                    os.remove(f"voice_files/{guild_id}-tts.mp3")
                 except OSError:
                     pass
 
@@ -584,7 +582,7 @@ async def process_queue(guild: discord.Guild):
 
                     # Clean up the audio file
                     try:
-                        os.remove(tts_file)
+                        os.remove(f"voice_files/{guild_id}-tts.mp3")
                         print(f"{guild.id}: Cleaned up the TTS file")
                     except OSError as remove_error:
                         print(f"{guild.id}: Error cleaning up the TTS file:\n\t{remove_error}")
@@ -594,7 +592,7 @@ async def process_queue(guild: discord.Guild):
 
                 # Play the audio file in the voice channel
                 print(f"{guild.id}: Playing the TTS message in {message.channel.id}...")
-                voice_client.play(discord.FFmpegPCMAudio(tts_file, executable='bot-env/ffmpeg/bin/ffmpeg'), after=after_playing)
+                voice_client.play(discord.FFmpegPCMAudio(f"voice_files/{guild_id}-tts.mp3", executable='bot-env/ffmpeg/bin/ffmpeg'), after=after_playing)
                 # ffmpeg currently uses version 7.1 on windows and 7.0.2 on linux
 
                 # Wait until the current message is finished playing
