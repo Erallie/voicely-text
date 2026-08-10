@@ -803,7 +803,7 @@ def parse_translation_message(content: str):
     # **`es`:** Palabras para traducir
     # **`ja`:** 翻訳する言葉
     section_pattern = re.compile(
-        r'^\*\*(Original\s*·\s*)?`([A-Za-z]{2,3}(?:-[A-Za-z0-9]+)?)`:\*\*\s*(.*)$',
+        r'^\*\*(Original\s*·\s*)?`([A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*)`:\*\*\s*(.*)$',
         re.IGNORECASE
     )
 
@@ -831,6 +831,297 @@ def parse_translation_message(content: str):
 
     return speaker_id, translations
 
+TTS_LANGUAGE_ALIASES = {
+    # Modern/deprecated BCP 47 equivalents used by gTTS.
+    "he": "iw",
+    "jv": "jw",
+    "fil": "tl",
+    "in": "id",
+    "nb": "no",
+    "nn": "no",
+    "mo": "ro",
+
+    # Common ISO 639-2/639-3 equivalents.
+    "afr": "af",
+    "amh": "am",
+    "ara": "ar",
+    "ben": "bn",
+    "bos": "bs",
+    "bul": "bg",
+    "cat": "ca",
+    "ces": "cs",
+    "cze": "cs",
+    "cmn": "zh",
+    "cym": "cy",
+    "wel": "cy",
+    "dan": "da",
+    "deu": "de",
+    "ger": "de",
+    "ell": "el",
+    "gre": "el",
+    "eng": "en",
+    "spa": "es",
+    "est": "et",
+    "eus": "eu",
+    "baq": "eu",
+    "fin": "fi",
+    "fra": "fr",
+    "fre": "fr",
+    "glg": "gl",
+    "guj": "gu",
+    "hau": "ha",
+    "heb": "iw",
+    "hin": "hi",
+    "hrv": "hr",
+    "hun": "hu",
+    "ind": "id",
+    "isl": "is",
+    "ice": "is",
+    "ita": "it",
+    "jav": "jw",
+    "jpn": "ja",
+    "kan": "kn",
+    "khm": "km",
+    "kor": "ko",
+    "lat": "la",
+    "lav": "lv",
+    "lit": "lt",
+    "mal": "ml",
+    "mar": "mr",
+    "msa": "ms",
+    "may": "ms",
+    "mya": "my",
+    "bur": "my",
+    "nep": "ne",
+    "nld": "nl",
+    "dut": "nl",
+    "nor": "no",
+    "pan": "pa",
+    "pol": "pl",
+    "por": "pt",
+    "ron": "ro",
+    "rum": "ro",
+    "rus": "ru",
+    "sin": "si",
+    "slk": "sk",
+    "slo": "sk",
+    "sqi": "sq",
+    "alb": "sq",
+    "srp": "sr",
+    "sun": "su",
+    "swa": "sw",
+    "swe": "sv",
+    "tam": "ta",
+    "tel": "te",
+    "tha": "th",
+    "tgl": "tl",
+    "tur": "tr",
+    "ukr": "uk",
+    "urd": "ur",
+    "vie": "vi",
+    "yue": "yue",
+    "zho": "zh",
+    "chi": "zh",
+
+    # Additional practical fallbacks for unsupported BCP 47 languages.
+    "ceb": "tl",
+    "ace": "id",
+    "ban": "id",
+    "bjn": "id",
+    "bug": "id",
+    "min": "id",
+    "mad": "id",
+    "mak": "id",
+    "ilo": "tl",
+    "hil": "tl",
+    "war": "tl",
+    "pam": "tl",
+    "pag": "tl",
+    "bcl": "tl",
+    "gsw": "de",
+    "bar": "de",
+    "nds": "de",
+    "lb": "de",
+    "fy": "nl",
+    "li": "nl",
+    "oc": "fr",
+    "br": "fr",
+    "co": "fr",
+    "ast": "es",
+    "an": "es",
+    "ext": "es",
+    "pap": "es",
+    "ht": "fr",
+    "gd": "en",
+    "ga": "en",
+    "sco": "en",
+    "mt": "it",
+    "fo": "da",
+    "se": "no",
+    "krl": "fi",
+    "mk": "bg",
+    "cnr": "sr",
+    "szl": "pl",
+    "csb": "pl",
+    "hsb": "de",
+    "dsb": "de",
+    "rm": "it",
+    "az": "tr",
+    "tk": "tr",
+    "uz": "tr",
+    "crh": "tr",
+    "gag": "tr",
+    "kk": "ru",
+    "ky": "ru",
+    "tt": "ru",
+    "ba": "ru",
+    "tg": "ru",
+    "prs": "fa",
+    "pes": "fa",
+    "ps": "ur",
+    "sd": "ur",
+    "ku": "tr",
+    "ckb": "fa",
+    "ug": "tr",
+    "bho": "hi",
+    "mai": "hi",
+    "awa": "hi",
+    "hne": "hi",
+    "raj": "hi",
+    "doi": "hi",
+    "kok": "mr",
+    "sa": "hi",
+    "as": "bn",
+    "or": "bn",
+    "ory": "bn",
+    "mni": "bn",
+    "gom": "mr",
+    "dv": "si",
+    "lo": "th",
+    "shn": "th",
+    "bo": "zh",
+    "dz": "zh",
+    "mn": "ru",
+    "hak": "zh",
+    "nan": "zh",
+    "wuu": "zh",
+    "gan": "zh",
+    "lzh": "zh",
+    "ryu": "ja",
+    "ain": "ja",
+    "tet": "id",
+    "mi": "en",
+    "sm": "en",
+    "to": "en",
+    "fj": "en",
+    "haw": "en",
+    "mg": "fr",
+    "rw": "sw",
+    "rn": "sw",
+    "so": "sw",
+    "om": "sw",
+    "ti": "am",
+    "gez": "am",
+    "aa": "am",
+    "ny": "sw",
+    "sn": "sw",
+    "st": "en",
+    "tn": "en",
+    "ts": "en",
+    "xh": "en",
+    "zu": "en",
+    "lg": "sw",
+    "ak": "en",
+    "tw": "en",
+    "ee": "en",
+    "yo": "en",
+    "ig": "en",
+    "wo": "fr",
+    "ff": "fr",
+    "bm": "fr",
+    "ln": "fr",
+    "kg": "fr",
+    "ber": "ar",
+    "kab": "fr",
+    "ary": "ar",
+    "arz": "ar",
+    "apc": "ar",
+    "acm": "ar",
+    "ajp": "ar",
+    "aeb": "ar",
+    "afb": "ar",
+    "acq": "ar",
+    "mzn": "fa",
+    "pnb": "ur",
+    "skr": "ur",
+    "sat": "hi",
+    "lus": "en",
+    "kha": "en",
+    "brx": "hi",
+    "chr": "en",
+    "nv": "en",
+    "iu": "en",
+    "ik": "en",
+    "qu": "es",
+    "ay": "es",
+    "gn": "es",
+    "nah": "es",
+    "yua": "es",
+    "jbo": "en",
+    "eo": "en",
+    "ia": "en",
+    "ie": "en",
+    "vo": "en",
+}
+
+
+def get_closest_tts_language(language_tag: str, supported_languages: dict):
+    normalized_tag = language_tag.strip().replace("_", "-")
+    normalized_lower = normalized_tag.lower()
+
+    # Preserve the exact spelling/capitalization gTTS expects.
+    supported_by_lower = {
+        supported_tag.lower(): supported_tag
+        for supported_tag in supported_languages
+    }
+
+    # 1. Exact supported BCP 47 tag.
+    if normalized_lower in supported_by_lower:
+        return supported_by_lower[normalized_lower]
+
+    subtags = normalized_lower.split("-")
+    base_language = subtags[0]
+
+    # 2. Chinese/macrolanguage variants where script/region gives us
+    #    a better match than simply falling back to "zh".
+    if base_language in {"zh", "cmn", "zho"}:
+        if "hant" in subtags or any(region in subtags for region in {"tw", "hk", "mo"}):
+            if "zh-tw" in supported_by_lower:
+                return supported_by_lower["zh-tw"]
+
+        if "hans" in subtags or any(region in subtags for region in {"cn", "sg"}):
+            if "zh-cn" in supported_by_lower:
+                return supported_by_lower["zh-cn"]
+
+        if "zh" in supported_by_lower:
+            return supported_by_lower["zh"]
+
+    # 3. Same base language without region/script.
+    if base_language in supported_by_lower:
+        return supported_by_lower[base_language]
+
+    # 4. Known equivalent/legacy/ISO language code.
+    alias = TTS_LANGUAGE_ALIASES.get(base_language)
+
+    if alias:
+        alias_lower = alias.lower()
+
+        if alias_lower in supported_by_lower:
+            return supported_by_lower[alias_lower]
+
+    return None
+
+
 async def process_translation_message(message: discord.Message):
     speaker_id, translations = parse_translation_message(message.content)
 
@@ -846,19 +1137,20 @@ async def process_translation_message(message: discord.Message):
         language_tag = translation["language"]
         translated_text = translation["text"]
 
-        accent = language_tag.lower()
+        accent = get_closest_tts_language(language_tag, supported_languages)
 
-        if accent not in supported_languages:
-            base_language = accent.split("-")[0]
+        if accent is None:
+            print(
+                f"{message.guild.id}: Unsupported translation language "
+                f"'{language_tag}' and no close supported TTS language was found, skipping."
+            )
+            continue
 
-            if base_language in supported_languages:
-                accent = base_language
-            else:
-                print(
-                    f"{message.guild.id}: Unsupported translation language "
-                    f"'{language_tag}', skipping."
-                )
-                continue
+        if accent.lower() != language_tag.lower():
+            print(
+                f"{message.guild.id}: Translation language '{language_tag}' "
+                f"is not directly supported; using closest TTS language '{accent}'."
+            )
 
         region = get_translation_region(language_tag)
 
